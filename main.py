@@ -1,10 +1,11 @@
 #!/usr/bin/python3
-import PyQt5
+
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
-#import ctypes
-#import winsound
-#from ctypes import wintypes
+import ctypes
+import winsound
+# from ctypes import wintypes
+import traceback
 from bs4 import BeautifulSoup as bs
 from urllib.parse import urlparse
 import smtplib
@@ -13,9 +14,9 @@ import pandas as pd
 import fileinput
 from ldap3 import Server, Connection, ALL
 from pandas import *
-import docx
-from docx import exceptions
-import xlrd
+# import docx
+# from docx import exceptions
+# import xlrd
 from docx.shared import Pt
 from docx.enum.section import *
 from docx.enum.text import *
@@ -26,47 +27,62 @@ import json
 import socket
 import datetime
 import requests
-import traceback
 import re
-
-
 
 val = False
 run = True
-u=''
-loc=''
-num=''
+u = ''
+loc = ''
+num = ''
 scan = ''
 log = "log.txt"
 sdt = datetime.datetime.now()
 w = socket.gethostname()
-
 ws = w.replace('.mskcc.org', '')
 
+
 class loginWindow(QDialog):
-    def __init__(self,parent=None):
-        super(loginWindow,self).__init__(parent)
+    def __init__(self, parent=None):
+        super(loginWindow, self).__init__(parent)
         self.setWindowTitle('ReDi-Rx')
         self.loginUser = QLineEdit()
         self.loginPass = QLineEdit()
         self.loginPass.setEchoMode(QLineEdit.Password)
         self.loginULabel = QLabel("Outlook ID:")
         self.loginPLabel = QLabel("Password:")
-        self.loginButton = QPushButton('Login',self)
+        self.loginButton = QPushButton('Login', self)
         self.loginButton.clicked.connect(self.handleLogin)
         llayout = QGridLayout(self)
-        llayout.addWidget(self.loginULabel,1,1,1,1)
-        llayout.addWidget(self.loginUser,1,2,1,1)
-        llayout.addWidget(self.loginPLabel,2,1,1,1)
-        llayout.addWidget(self.loginPass,2,2,1,1)
-        llayout.addWidget(self.loginButton,3,4,1,1)
+        llayout.addWidget(self.loginULabel, 1, 1, 1, 1)
+        llayout.addWidget(self.loginUser, 1, 2, 1, 1)
+        llayout.addWidget(self.loginPLabel, 2, 1, 1, 1)
+        llayout.addWidget(self.loginPass, 2, 2, 1, 1)
+        llayout.addWidget(self.loginButton, 3, 4, 1, 1)
 
     def handleLogin(self):
         global u
         global val
         global admin
+        global loc
+        global num
         u = self.loginUser.text()
         p = self.loginPass.text()
+        locnum = pd.read_excel("WS.xlsx", sheet_name="Pharm WS Info")
+        if locnum.loc[locnum['WSID'] == ws, 'WSID'].empty:
+            QMessageBox.warning(self, 'Warning',
+                                'This is not a registered Pharmacy workstation.\nPlease submit the workstation information to the Pharmacy Informatics team.',
+                                QMessageBox.Ok, QMessageBox.Ok)
+            loc = 'Unassigned WS'
+            num = '999-999-9999'
+        elif locnum.loc[locnum['WSID'] == ws, 'Contact#'].empty and locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]:
+            loc = locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]
+            num = '999-999-9999'
+        elif locnum.loc[locnum['WSID'] == ws, 'Area'].empty and locnum.loc[locnum['WSID'] == ws, 'Contact#'].iloc[0]:
+            loc = 'Unassigned WS'
+            num = locnum.loc[locnum['WSID'] == ws, 'Contact#'].iloc[0]
+        else:
+            loc = locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]
+            num = locnum.loc[locnum['WSID'] == ws, 'Contact#'].iloc[0]
         if p != '':
 
             server = Server(host='MSKCC.ROOT.MSKCC.ORG', use_ssl=True, get_info=ALL)
@@ -76,7 +92,6 @@ class loginWindow(QDialog):
                 QMessageBox.warning(self, "Warning", "Invalid Credentials.", QMessageBox.Ok, QMessageBox.Ok)
                 conn.password = ''
                 val = False
-                    # sys.exit()
 
             else:
                 self.accept()
@@ -109,6 +124,7 @@ class loginWindow(QDialog):
             QMessageBox.warning(self, "Warning", "Your Password must be entered.", QMessageBox.Ok)
             val = False
 
+
 class mainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -118,14 +134,15 @@ class mainWindow(QMainWindow):
         self.width = 1000
         self.height = 200
         self.setWindowTitle(self.title)
-        self.setGeometry(self.left,self.top,self.width,self.height)
+        self.setGeometry(self.left, self.top, self.width, self.height)
         self.tableWidget = initUi(self)
         self.setCentralWidget(self.tableWidget)
+        self.setWindowIcon(QIcon('icon.png'))
 
 
-class initUi(QWidget): #setting up UI elements#
+class initUi(QWidget):  # setting up UI elements#
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super(QWidget, self).__init__(parent)
         self.serialEnabled = False
         self.layout = QGridLayout(self)
         self.user = QLabel()
@@ -138,25 +155,12 @@ class initUi(QWidget): #setting up UI elements#
         global run
         global u
         global admin
-        locnum = pd.read_excel("WS.xlsx", sheet_name="Pharm WS Info")
-        if locnum.loc[locnum['WSID'] == ws, 'WSID'].empty:
-            QMessageBox.warning(self, 'Warning',
-                                'This is not a registered Pharmacy workstation.\nPlease submit the workstation information to the Pharmacy Informatics team.',
-                                QMessageBox.Ok, QMessageBox.Ok)
-            loc = 'Unassigned WS'
-            num = '999-999-9999'
-        elif locnum.loc[locnum['WSID'] == ws, 'Contact#'].empty and locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]:
-            loc = locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]
-            num = '999-999-9999'
-        elif locnum.loc[locnum['WSID'] == ws, 'Area'].empty and locnum.loc[locnum['WSID'] == ws, 'Contact#'].iloc[0]:
-            loc = 'Unassigned WS'
-            num = locnum.loc[locnum['WSID'] == ws, 'Contact#'].iloc[0]
-        else:
-            loc = locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]
-            num = locnum.loc[locnum['WSID'] == ws, 'Contact#'].iloc[0]
+        global loc
+        global num
 
         self.loc.setText(loc)
         self.phone.setText(str(num))
+
         self.user.setText(u + " / " + ws)
         self.tabs = QTabWidget()
         self.tab1 = QWidget()
@@ -399,15 +403,20 @@ class initUi(QWidget): #setting up UI elements#
         self.psScan = QLineEdit()
         self.psResult = QLabel()
         self.psImage = QLabel()
-        self.psDisc = QLabel("Placeholder for Disclaimer")
+        self.psDiscIm = QLabel()
+        di = QPixmap("disc.jpg").scaledToHeight(25)
+        self.psDiscIm.setPixmap(di)
+        self.psDisc = QLabel("DISCLAIMER: The information on polysorbate 80 is from the DailyMed database. It is provided solely for information purposes.\nUsers of this information should always use their own clinical discretion.")
+        self.psDisc.setFont(QFont('Verdana', 12))
         self.psScan.returnPressed.connect(self.parseScan3)
         self.tab6.layout.addWidget(self.psLabel)
         self.tab6.layout.addWidget(self.psScan)
         self.tab6.layout.addWidget(self.psImage)
         h6 = QGridLayout(self)
-        h6.addLayout(self.tab6.layout, 2, 1, 1, 1)
-        h6.addWidget(self.psDisc,1,1,1,1)
-        h6.addWidget(self.psResult, 3,1,1,1)
+        h6.addLayout(self.tab6.layout, 2, 2, 1, 1)
+        h6.addWidget(self.psDiscIm, 1, 1, 1, 1)
+        h6.addWidget(self.psDisc, 1, 2, 1, 1)
+        h6.addWidget(self.psResult, 3, 2, 1, 1)
         self.tab6.setLayout(h6)
 
         # Rejection Reporting Tab #
@@ -416,23 +425,23 @@ class initUi(QWidget): #setting up UI elements#
         self.rejScan = QLineEdit()
         self.rejScan.returnPressed.connect(self.rejFind)
         self.rejResult = QLabel()
-        self.rejScan.setFixedSize(150,22)
+        self.rejScan.setFixedSize(150, 22)
         self.rejResult.setWordWrap(True)
         self.reasonLabel = QLabel("Reason:")
         self.reasonDrop = QComboBox()
-        self.reasonDrop.addItems(["Expired Med", "Wrong Diluent Type","Wrong Dose/Volume","Wrong Drug","Wrong Patient","Wrong Reconstruction","Other"])
+        self.reasonDrop.addItems(["Expired Med", "Wrong Diluent Type", "Wrong Dose/Volume", "Wrong Drug", "Wrong Patient", "Wrong Reconstruction", "Other"])
         self.rejComLabel = QLabel("Comments:")
         self.rejComField = QTextEdit()
         self.rejSub = QPushButton("Submit Rejection")
         self.rejSub.clicked.connect(self.rejSubmit)
         self.rejSub.setEnabled(False)
-        self.rejComField.setFixedSize(300,88)
+        self.rejComField.setFixedSize(300, 88)
         self.rejLotLabel = QLabel("Batch Lot:")
         self.rejLotField = QLineEdit()
-        self.rejLotField.setFixedSize(150,22)
+        self.rejLotField.setFixedSize(150, 22)
         self.rejExpLabel = QLabel("Batch Exp:")
         self.rejExpField = QLineEdit()
-        self.rejExpField.setFixedSize(150,22)
+        self.rejExpField.setFixedSize(150, 22)
         self.rejDesc = QLineEdit()
         self.rejDoseQty = QLineEdit()
         self.rejDoseUom = QLineEdit()
@@ -440,11 +449,11 @@ class initUi(QWidget): #setting up UI elements#
         self.rejType = QLabel()
         self.scan4 = QLineEdit()
         self.rdoseNum = QLineEdit()
-        self.tab7.layout.addWidget(self.rejLabel,0,0,1,1)
-        self.tab7.layout.addWidget(self.rejScan,0,1,1,1)
-        self.tab7.layout.addWidget(self.rejResult,0,2,1,14)
+        self.tab7.layout.addWidget(self.rejLabel, 0, 0, 1, 1)
+        self.tab7.layout.addWidget(self.rejScan, 0, 1, 1, 1)
+        self.tab7.layout.addWidget(self.rejResult, 0, 2, 1, 14)
         self.h7 = QGridLayout(self)
-        self.h7.addLayout(self.tab7.layout,1,0,1,16)
+        self.h7.addLayout(self.tab7.layout, 1, 0, 1, 16)
         self.h7.addWidget(self.rejLotLabel, 10, 0, 1, 1)
         self.h7.addWidget(self.rejLotField, 10, 1, 1, 1)
         self.h7.addWidget(self.rejExpLabel, 10, 2, 1, 1)
@@ -454,7 +463,7 @@ class initUi(QWidget): #setting up UI elements#
         self.h7.addWidget(self.reasonDrop, 12, 1, 1, 1)
         self.h7.addWidget(self.rejComLabel, 14, 0, 1, 1)
         self.h7.addWidget(self.rejComField, 14, 1, 1, 15)
-        self.h7.addWidget(self.rejSub,16,0,1,2)
+        self.h7.addWidget(self.rejSub, 16, 0, 1, 2)
         self.rejLotLabel.setVisible(False)
         self.rejLotField.setVisible(False)
         self.rejExpLabel.setVisible(False)
@@ -468,43 +477,33 @@ class initUi(QWidget): #setting up UI elements#
         self.scan.setFocus()  # bring cursor to scan field upon start#
         self.show()
 
-
     def closeApp(self):
         global run
         global val
         val = False
-        #app.exec()
+        # app.exec()
         sys.exit()
-        #app.exec_()
-
+        # app.exec_()
 
     def addMoreItems(self):
         if len(self.ndc2.text()) == 0:
-            QMessageBox.warning(self, "Warning", "You must scan at least one product before adding more.",
-                                QMessageBox.Ok, QMessageBox.Ok)
+            QMessageBox.warning(self, "Warning", "You must scan at least one product before adding more.", QMessageBox.Ok, QMessageBox.Ok)
             self.scan2.selectAll()
         elif self.lastScan.text() == "F":
-            QMessageBox.warning(self, "Warning", "You have an Incorrect Scan.\nPlease review before adding more items.",
-                                QMessageBox.Ok, QMessageBox.Ok)
+            QMessageBox.warning(self, "Warning", "You have an Incorrect Scan.\nPlease review before adding more items.", QMessageBox.Ok, QMessageBox.Ok)
         # below lines for capturing for Marie Ryan's list (Albumin, Blood Prods, IVIGs)#
         elif self.f.count() == 16 and (len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0):
-            QMessageBox.warning(self, "Warning", "You must record all information before adding more products.",
-                                QMessageBox.Ok, QMessageBox.Ok)
+            QMessageBox.warning(self, "Warning", "You must record all information before adding more products.", QMessageBox.Ok, QMessageBox.Ok)
             self.scan2.selectAll()
 
         elif self.f.count() == 22 and len(self.f.itemAt(17).widget().text()) == 0:
-            QMessageBox.warning(self, "Warning", "You must scan at least one product before adding more.",
-                                QMessageBox.Ok, QMessageBox.Ok)
+            QMessageBox.warning(self, "Warning", "You must scan at least one product before adding more.", QMessageBox.Ok, QMessageBox.Ok)
             self.scan2.selectAll()
-        elif self.f.count() == 22 and (
-                len(self.f.itemAt(17).widget().text()) != 0 and (
-                len(self.f.itemAt(19).widget().text()) == 0 or len(self.f.itemAt(21).widget().text()) == 0)):
-            QMessageBox.warning(self, "Warning", "You must record all information before adding more products.",
-                                QMessageBox.Ok, QMessageBox.Ok)
+        elif self.f.count() == 22 and (len(self.f.itemAt(17).widget().text()) != 0 and (len(self.f.itemAt(19).widget().text()) == 0 or len(self.f.itemAt(21).widget().text()) == 0)):
+            QMessageBox.warning(self, "Warning", "You must record all information before adding more products.", QMessageBox.Ok, QMessageBox.Ok)
             self.scan2.selectAll()
         elif self.ndcLine == 6:
-            QMessageBox.warning(self, "Warning", "No more than 3 different Lots can be recorded.", QMessageBox.Ok,
-                                QMessageBox.Ok)
+            QMessageBox.warning(self, "Warning", "No more than 3 different Lots can be recorded.", QMessageBox.Ok, QMessageBox.Ok)
             self.scan2.selectAll()
         else:
             i = self.ndcCount
@@ -526,7 +525,7 @@ class initUi(QWidget): #setting up UI elements#
             self.f.addWidget(self.ndcs[i + 3], line, 3, 1, 1)
             self.f.addWidget(self.ndcs[i + 4], line, 4, 1, 1)
             self.f.addWidget(self.ndcs[i + 5], line, 5, 1, 1)
-            #print(self.ndcCount, self.f.indexOf(self.ndc2), self.f.indexOf(self.ndcs[i+1]), self.f.count())
+            # print(self.ndcCount, self.f.indexOf(self.ndc2), self.f.indexOf(self.ndcs[i+1]), self.f.count())
             self.ndcCount += 6
             self.ndcLine += 1
         self.scan2.setFocus()
@@ -540,7 +539,7 @@ class initUi(QWidget): #setting up UI elements#
         self.image_res.clear()
         sv = self.scans1.text()
 
-        if sv == '' :
+        if sv == '':
             QMessageBox.warning(self, 'Warning', "Please Scan a Product First.", QMessageBox.Ok, QMessageBox.Ok)
         else:
 
@@ -548,19 +547,15 @@ class initUi(QWidget): #setting up UI elements#
             r = requests.get("https://dailymed.nlm.nih.gov/dailymed/search.cfm", params=params)
             o = urlparse(r.url).query
             q = o.replace("setid=", '')
-            #print(q)
+            # print(q)
             soup = bs(r.text, "html5lib")
-            #print(soup)
-
+            # print(soup)
             dt = soup.find("td", {"class": "formHeadingTitle"}, string="Packaging")
-            #print(dt)
 
             if dt is None:
                 mdt = str(soup.find("a", {"class": "drug-info-link"}))
                 mdt = mdt[mdt.find("setid=") + 6:mdt.find("\">")]
-                #print(sv, mdt)
                 if mdt == '':
-                    #print(sv + ';' + "Response from DailyMed: No Drug Package Labels found.")
                     log = open("log.txt", "a+")
                     log.write("Response from DailyMed: No Drug Package Labels found." + "\n")
                     log.close()
@@ -575,20 +570,18 @@ class initUi(QWidget): #setting up UI elements#
                     self.pack.clear()
                     self.str.clear()
                     self.dform.clear()
-                    #self.scan.clear()
+                    # self.scan.clear()
                     self.scan.setFocus()
                 else:
                     param1 = {"setid": mdt}
                     r1 = requests.get("https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm", params=param1)
-                    #print(r1.url)
                     s1 = bs(r1.text, "html5lib")
                     dr = s1.find("td", {"class": "formLabel"}, string="Route of Administration").findNext("td").contents[0]
-                    #print(dr)
                     url = "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/%s/packaging.json" % mdt
 
                     source = requests.get(url).text
                     d = json.loads(source)
-                    #print(json.dumps(d, indent=3))
+                    # print(json.dumps(d, indent=3))
 
                     title = d['data']['title']
                     d1 = title.replace(title[title.find("[") + 1:title.find("]")], '')
@@ -608,46 +601,33 @@ class initUi(QWidget): #setting up UI elements#
                         # print(json.dumps(item, indent=3))
                         i = len(item['active_ingredients'])
                         p = len(item['packaging'])
-                        #print("ingredients: " + str(i) + "\npackages: " + str(p))
                         b = item['product_name']
-                        #print(dt)
-                        # drug = item['product_name_generic']
-                        f = dt.replace(b+" ",'')
+                        f = dt.replace(b + " ", '')
                         f = f.replace(f[f.find('('):f.find(')') + 1], '')
                         f = str(f).lstrip()
                         self.dform.setText(f.capitalize())
-                        # self.bname.setText(b)
-                        # self.drug.setText(drug)
+
                         # Setting up variables for loops #
                         j = 0
                         k = 0
                         l = 0
                         # for multiple ingredients #
                         n = ''
-
-                        # for j in range(i):  # Multi-Ingredient Items#
-
-                        # self.str.setText(str(stg))
                         j = 0
 
                         if 'parts' in item:
                             parts = len(item['parts'])
-                            brand = item['product_name']
-                            drug = item['product_name_generic']
+                            # brand = item['product_name']
+                            # drug = item['product_name_generic']
                             for l in range(parts):
                                 for j in range(len(item['parts'][str(l + 1)]['packaging'])):
                                     ndc = item['parts'][str(l + 1)]['packaging'][j]['ndc']
-                                    # print(ndc)
                                     if ndc.replace('-', '') == sv:
-                                        # print(ndc)
                                         if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
-                                            desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][
-                                                       l] + ";" + \
-                                                   item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][
-                                                       k + 1]
+                                            desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
                                         else:
                                             desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
-                                        brand = item['product_name']
+                                        brand = str(item['product_name']).replace('\n', ' ')
                                         drug = item['product_name_generic']
                                         if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
                                             stg = ''
@@ -664,20 +644,12 @@ class initUi(QWidget): #setting up UI elements#
                                         for j in range(len(item['packaging'])):
                                             ndc = item['packaging'][j]['ndc']
                                             if ndc.replace('-', '') == sv:
-                                                brand = item['product_name']
+                                                brand = str(item['product_name']).replace('\n', ' ')
                                                 drug = item['product_name_generic']
-                                                if len(item['parts'][str(l + 1)]['packaging'][j][
-                                                           'package_descriptions']) > 1:
-                                                    desc = \
-                                                        item['parts'][str(l + 1)]['packaging'][j][
-                                                            'package_descriptions'][
-                                                            l] + ";" + \
-                                                        item['parts'][str(l + 1)]['packaging'][j][
-                                                            'package_descriptions'][k + 1]
+                                                if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
+                                                    desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
                                                 else:
-                                                    desc = \
-                                                        item['parts'][str(l + 1)]['packaging'][j][
-                                                            'package_descriptions'][0]
+                                                    desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
                                                 if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
                                                     pass
                                                 else:
@@ -695,26 +667,19 @@ class initUi(QWidget): #setting up UI elements#
                                     pass
                                 else:
                                     ndc = item['packaging'][j]['ndc']
-
-                                    # print(ndc)
-
                                     if ndc.replace('-', '') == sv:
-                                        # print(item)
-                                        # print(ndc)
                                         if len(item['packaging'][j]['package_descriptions']) > 1:
-                                            desc = item['packaging'][j]['package_descriptions'][l] + '; ' + \
-                                                   item['packaging'][j]['package_descriptions'][k + 1]
+                                            desc = item['packaging'][j]['package_descriptions'][l] + '; ' + item['packaging'][j]['package_descriptions'][k + 1]
                                         else:
                                             desc = item['packaging'][j]['package_descriptions'][l]
                                         # print(desc)
-                                        brand = item['product_name']
+                                        brand = str(item['product_name']).replace('\n', ' ')
                                         drug = item['product_name_generic']
                                         for k in range(len(item['active_ingredients'])):
                                             if len(item['active_ingredients']) < 2:
                                                 n = item['active_ingredients'][k]['strength']
                                             elif len(item['active_ingredients']) > 1:
-                                                n += item['active_ingredients'][k]['name'] + ' ' + \
-                                                     item['active_ingredients'][k]['strength'] + ', '
+                                                n += item['active_ingredients'][k]['name'] + ' ' + item['active_ingredients'][k]['strength'] + ', '
                                         stg = n.rstrip(', ').capitalize()
                                         self.ndc.setText(ndc)
                                         self.str.setText(str(stg))
@@ -722,27 +687,23 @@ class initUi(QWidget): #setting up UI elements#
                                         self.drug.setText(drug)
                                         self.bname.setText(brand)
                                         log = open("log.txt", "a+")
-                                        log.write("Response from DailyMed:" + "\n" + str(
-                                            dt) + '; ' + str(stg) + '; ' + ndc + '; ' + desc + '\n')
+                                        log.write("Response from DailyMed:" + "\n" + str(dt) + '; ' + str(stg) + '; ' + ndc + '; ' + desc + '\n')
                                         log.close()
 
-
             else:
-                dr = soup.find("td", {"class": "formLabel"}, string="Route of Administration").findNext("td").contents[0] #Finding Route of administration#
+                dr = soup.find("td", {"class": "formLabel"}, string="Route of Administration").findNext("td").contents[0]  # Finding Route of administration#
                 url = "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/%s/packaging.json" % q
                 source = requests.get(url).text
                 d = json.loads(source)
-                #print(json.dumps(d, indent=3))
-
+                # print(json.dumps(d, indent=3))
 
                 title = d['data']['title']
-                d1 = title.replace(title[title.find("[")+1:title.find("]")],'')
+                d1 = title.replace(title[title.find("[") + 1:title.find("]")], '')
                 # finding drug name #
                 dt = d1.replace("[]", '')
-                dt = dt.replace(dt[dt.find("("):dt.find(")")+1],'')
-                #print(dt)
+                dt = dt.replace(dt[dt.find("("):dt.find(")") + 1], '')
                 # Finding Labeler #
-                mfr = title[title.find("[")+1:title.find("]")]
+                mfr = title[title.find("[") + 1:title.find("]")]
                 self.mfr.setText(mfr)
                 self.route.setText(dr.title())
                 self.drug.clear()
@@ -751,19 +712,15 @@ class initUi(QWidget): #setting up UI elements#
 
                 for item in d['data']['products']:
                     # Setting up lists length #
-                    #print(json.dumps(item, indent=3))
+                    # print(json.dumps(item, indent=3))
                     i = len(item['active_ingredients'])
                     p = len(item['packaging'])
-                    #print("ingredients: "+str(i)+"\npackages: "+str(p))
                     b = item['product_name']
-                    #print(dt)
-                    #drug = item['product_name_generic']
                     f = dt[len(b) + 1:]
                     f = f.replace(f[f.find('('):f.find(')') + 2], '')
                     f = str(f).lstrip()
                     self.dform.setText(f.capitalize())
-                    #self.bname.setText(b)
-                    #self.drug.setText(drug)
+
                     # Setting up variables for loops #
                     j = 0
                     k = 0
@@ -772,21 +729,17 @@ class initUi(QWidget): #setting up UI elements#
                     j = 0
                     if 'parts' in item:
                         parts = len(item['parts'])
-                        brand = item['product_name']
-                        drug = item['product_name_generic']
+                        # brand = item['product_name']
+                        # drug = item['product_name_generic']
                         for l in range(parts):
                             for j in range(len(item['parts'][str(l + 1)]['packaging'])):
                                 ndc = item['parts'][str(l + 1)]['packaging'][j]['ndc']
-                                #print(ndc)
                                 if ndc.replace('-', '') == sv:
-                                    #print(ndc)
                                     if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
-                                        desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][
-                                                   l] + ";" + \
-                                               item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
+                                        desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
                                     else:
                                         desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
-                                    brand = item['product_name']
+                                    brand = str(item['product_name']).replace('\n', ' ')
                                     drug = item['product_name_generic']
                                     if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
                                         stg = ''
@@ -803,17 +756,12 @@ class initUi(QWidget): #setting up UI elements#
                                     for j in range(len(item['packaging'])):
                                         ndc = item['packaging'][j]['ndc']
                                         if ndc.replace('-', '') == sv:
-                                            brand = item['product_name']
+                                            brand = str(item['product_name']).replace('\n', ' ')
                                             drug = item['product_name_generic']
-                                            if len(item['parts'][str(l + 1)]['packaging'][j][
-                                                       'package_descriptions']) > 1:
-                                                desc = \
-                                                item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][
-                                                    l] + ";" + \
-                                                item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
+                                            if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
+                                                desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
                                             else:
-                                                desc = \
-                                                item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
+                                                desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
                                             if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
                                                 pass
                                             else:
@@ -825,30 +773,22 @@ class initUi(QWidget): #setting up UI elements#
                                             self.bname.setText(brand)
 
                     else:
-
                         for j in range(p):
                             if not item['packaging'][j]['ndc']:
                                 pass
                             else:
                                 ndc = item['packaging'][j]['ndc']
-
-                                #print(ndc)
-
                                 if ndc.replace('-', '') == sv:
-                                    #print(item)
-                                    #print(ndc)
                                     if len(item['packaging'][j]['package_descriptions']) > 1:
-                                        desc = item['packaging'][j]['package_descriptions'][l] + '; ' + \
-                                               item['packaging'][j]['package_descriptions'][k + 1]
+                                        desc = item['packaging'][j]['package_descriptions'][l] + '; ' + item['packaging'][j]['package_descriptions'][k + 1]
                                     else:
                                         desc = item['packaging'][j]['package_descriptions'][l]
-                                    #print(desc)
-                                    brand = item['product_name']
+                                    brand = str(item['product_name']).replace('\n', ' ')
                                     drug = item['product_name_generic']
                                     for k in range(len(item['active_ingredients'])):
-                                        if len(item['active_ingredients'])<2:
+                                        if len(item['active_ingredients']) < 2:
                                             n = item['active_ingredients'][k]['strength']
-                                        elif len(item['active_ingredients'])>1:
+                                        elif len(item['active_ingredients']) > 1:
                                             n += item['active_ingredients'][k]['name'] + ' ' + item['active_ingredients'][k]['strength'] + ', '
                                     stg = n.rstrip(', ').capitalize()
                                     self.ndc.setText(ndc)
@@ -857,50 +797,47 @@ class initUi(QWidget): #setting up UI elements#
                                     self.drug.setText(drug)
                                     self.bname.setText(brand)
                                     log = open("log.txt", "a+")
-                                    log.write("Response from DailyMed:" + "\n" + str(
-                                        dt) + '; ' + str(stg) + '; ' + ndc + '; ' + desc + '\n')
+                                    log.write("Response from DailyMed:" + "\n" + str(dt) + '; ' + str(stg) + '; ' + ndc + '; ' + desc + '\n')
                                     log.close()
         self.submitR.setEnabled(True)
-
-
 
     def submitReq(self):
         global u
         loc = self.loc.text()
         num = self.phone.text().strip()
-        if len(self.sndc.text())==0 or len(self.drug.text())==0 or len(self.mfr.text())==0\
-            or len(self.bname.text())==0 or len(self.str.text())==0\
-            or len(self.dform.text())==0 or len(self.pack.text())==0:
+        if len(self.sndc.text()) == 0 or len(self.drug.text()) == 0 or len(self.mfr.text()) == 0 \
+                or len(self.bname.text()) == 0 or len(self.str.text()) == 0 \
+                or len(self.dform.text()) == 0 or len(self.pack.text()) == 0 or len(self.scan.text()) == 0:
             QMessageBox.warning(self, "Warning", "All fields must have a value.", QMessageBox.Ok, QMessageBox.Ok)
             self.scan2.selectAll()
         else:
             log = open("log.txt", "a+")
-            log.write('Submitted to Pharmacy Informatics on ' + str(datetime.datetime.now()) + ' by ' + self.user.text() + '\n')
+            log.write('Submitted scancode information for scan ' + self.scan.text() + ' to Pharmacy Informatics on ' + str(datetime.datetime.now()) + ' by ' + self.user.text() + '\n')
             log.close()
             sender = 'zzPDL_PHA_Informatics@mskcc.org'
-            receiver = ['zzpdl_pha_informatics@mskcc.org','zzPDL_PHA_Billing_Compliance@mskcc.org']
-            #receiver = 'molinar1@mskcc.org'
-            message = ("Subject: New KBMA Barcode Request\nThis is a test from my Python app\n"+
-                        "\nSubmitted by: "+u+"@mskcc.org"+
-                        "\nLocation: "+loc+
-                        "\nNumber: "+str(num)+
-                        "\nRaw Scan:"+self.scan.text()+
-                        "\nSRx Scan: "+self.sndc.text()+
-                        "\nNDC: " + self.ndc.text()+
-                        "\nDrug Name: "+self.drug.text()+
-                        "\nBrand Name: " + self.bname.text() +
-                        "\nStrength: "+self.str.text()+
-                        "\nManufacturer: "+self.mfr.text()+
-                        "\nPackage Desc: "+self.pack.text()+
-                        "\nRoute: "+self.route.text()+
-                        "\nForm: "+self.dform.text()+
-                        "\nLot: "+self.lot.text()+
-                        "\nExp: "+self.exp.text())
+            receiver = ['zzpdl_pha_informatics@mskcc.org', 'zzPDL_PHA_Billing_Compliance@mskcc.org']
+            # receiver = 'molinar1@mskcc.org'
+            message = ("Subject: New KBMA Barcode Request\nThis is a test from my Python app\n" +
+                       "\nSubmitted by: " + u + "@mskcc.org" +
+                       "\nLocation: " + loc +
+                       "\nNumber: " + str(num) +
+                       "\nRaw Scan:" + self.scan.text() +
+                       "\nSRx Scan: " + self.sndc.text() +
+                       "\nNDC: " + self.ndc.text() +
+                       "\nDrug Name: " + self.drug.text() +
+                       "\nBrand Name: " + self.bname.text() +
+                       "\nStrength: " + self.str.text() +
+                       "\nManufacturer: " + self.mfr.text() +
+                       "\nPackage Desc: " + self.pack.text() +
+                       "\nRoute: " + self.route.text() +
+                       "\nForm: " + self.dform.text() +
+                       "\nLot: " + self.lot.text() +
+                       "\nExp: " + self.exp.text())
 
             try:
                 smtpObj = smtplib.SMTP('mskrelay.mskcc.org', 25)
                 smtpObj.sendmail(sender, receiver, message)
-                #print("sent")
+                # print("sent")
             except Exception as e:
                 log = open("log.txt", "a+")
                 log.write('Error! %s' % e)
@@ -917,16 +854,15 @@ class initUi(QWidget): #setting up UI elements#
                  self.user.text(),
                  self.phone.text(),
                  self.loc.text()]
-                 #self.user.text()+'@mskcc.org']
-            cnx0 = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                            'Server=;'
-                            #'Server=;'
-                            'Database=Test;'
-                            #'Database=Prod;'
-                            'uid=MSKKBMA;'
-                            'pwd=;')
-                            #'pwd=;')
-
+            # self.user.text()+'@mskcc.org']
+            cnx0 = pyodbc.connect('Driver={SQL Server};'
+                                  'Server=SCISTSQLPRI;'
+                                  # 'Server=SCISPSQLPRI;'
+                                  'Database=Test;'
+                                  # 'Database=Prod;'
+                                  'uid=MSKKBMA;'
+                                  'pwd=KBMA4Test;')
+            # 'pwd=KBMA4Prod;')
 
             c0 = cnx0.cursor()
             rows = c0.execute('exec MSKKBMA.KBMASaveDrugBarcodeInfoCollection '
@@ -934,10 +870,10 @@ class initUi(QWidget): #setting up UI elements#
                               '@NDC_Num = ?, '
                               '@DrugName = ?, '
                               '@BrandName = ?, '
-                              '@Manufacturer = ?, ' 
+                              '@Manufacturer = ?, '
                               '@StrConcentration = ?, '
                               '@DosageForm = ?, '
-                              '@TotalVolume = ?, ' 
+                              '@TotalVolume = ?, '
                               '@EnterBy = ?, '
                               '@Phone_Num = ?, '
                               '@EmailStr = ?;', s)
@@ -964,10 +900,9 @@ class initUi(QWidget): #setting up UI elements#
             self.scans1.clear()
 
     def add2Lexp(self):
-        alexp = open('lexp.txt',"a+")
-        alexp.write('\n'+self.newLexp.text())
+        alexp = open('lexp.txt', "a+")
+        alexp.write('\n' + self.newLexp.text())
         alexp.close()
-
 
         log = open("log.txt", "a+")
         log.write("New Item added: " + self.newLexp.text() + "\n")
@@ -995,22 +930,22 @@ class initUi(QWidget): #setting up UI elements#
 
         self.lexpt.resizeColumnsToContents()
         self.lexpt.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        QMessageBox.information(self, 'Message', "New Item Added: "+ self.newLexp.text(), QMessageBox.Ok, QMessageBox.Ok)
+        QMessageBox.information(self, 'Message', "New Item Added: " + self.newLexp.text(), QMessageBox.Ok, QMessageBox.Ok)
         self.newLexp.clear()
         self.newLexp.setFocus()
 
     def rem2Lexp(self):
         row = self.lexpt.currentRow()
-        item = self.lexpt.item(row,0).text()
-        #print(item)
+        item = self.lexpt.item(row, 0).text()
+        # print(item)
         ln = 1
 
         for line in fileinput.input('lexp.txt', inplace=True):
             if item in line:
                 continue
-            #print(line, end='')
+            # print(line, end='')
 
-        #Updating the table view#
+        # Updating the table view#
         lines = []
         with open('lexp.txt', 'r') as reader:
             line = reader.readlines()
@@ -1037,14 +972,14 @@ class initUi(QWidget): #setting up UI elements#
 
     def getPi(self):
         self.piTable.clear()
-        cnx1 = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                              #'Server=;'
-                              'Server=;'
+        cnx1 = pyodbc.connect('Driver={SQL Server};'
+                              # 'Server=SCISPSQLPRI;'
+                              'Server=SCISTSQLPRI;'
                               'Database=Test;'
-                              #'Database=Prod;'
+                              # 'Database=Prod;'
                               'UID=MSKKBMA;'
-                              'PWD=;')
-                              #'PWD=;')
+                              'PWD=KBMA4Test;')
+        # 'PWD=KBMA4Prod;')
 
         c1 = cnx1.cursor()
         try:
@@ -1056,24 +991,24 @@ class initUi(QWidget): #setting up UI elements#
 
         row = c1.fetchall()
         rc1 = len(row)
-        #rc1 = c1.rowcount
-        #To show all outstanding requests#
+        # rc1 = c1.rowcount
+        # To show all outstanding requests#
         if rc1 == 0:
-            #print("No Outstanding Requests.")
+            # print("No Outstanding Requests.")
             QMessageBox.information(self, 'Message', "No Outstanding Requests.", QMessageBox.Ok, QMessageBox.Ok)
             self.piTable.setRowCount(0)
             self.piTable.setColumnCount(0)
-            #winsound.PlaySound('done.wav',winsound.SND_ALIAS)
+            winsound.PlaySound('done.wav', winsound.SND_ALIAS)
         else:
             self.piTable.setColumnCount(14)
             self.piTable.setRowCount(rc1)
             self.piTable.setHorizontalHeaderLabels(column[0] for column in c1.description)
-            #self.piTable.setRowCount(10)
+            # self.piTable.setRowCount(10)
             for row_number, row_data in enumerate(row):
-                #self.piTable.insertRow(row_number)
+                # self.piTable.insertRow(row_number)
                 for column_number, data in enumerate(row_data):
                     self.piTable.setItem(row_number, column_number, QTableWidgetItem(str(data)))
-            #self.piTable.show()
+            # self.piTable.show()
             # To prevent editing in window, use this code. This will not, however, commit back to DB#
             self.piTable.setEditTriggers(QAbstractItemView.NoEditTriggers)
             self.piTable.resizeColumnsToContents()
@@ -1086,40 +1021,40 @@ class initUi(QWidget): #setting up UI elements#
         global ws
         row = self.piTable.currentRow()
         log = open('log.txt', 'a+')
-        if row <0:
-            #print("Nothing Selected")
+        if row < 0:
+            # print("Nothing Selected")
             QMessageBox.warning(self, 'Message', 'Nothing selected.', QMessageBox.Ok, QMessageBox.Ok)
         else:
             item = self.piTable.item(row, 0).text()
-            #print(item)
+            # print(item)
             pi = (item, ws)
             dtm = datetime.datetime.now()
-            cnx1 = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                                  'Server=;'
-                                  #'Server=;'
+            cnx1 = pyodbc.connect('Driver={SQL Server};'
+                                  'Server=SCISTSQLPRI;'
+                                  # 'Server=SCISPSQLPRI;'
                                   'Database=Test;'
-                                  #'Database=Prod;'
+                                  # 'Database=Prod;'
                                   'uid=MSKKBMA;'
-                                  'PWD=;')
-                                  #'PWD=;')
+                                  'PWD=KBMA4Test;')
+            # 'PWD=KBMA4Prod;')
 
             c1 = cnx1.cursor()
             qr = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifySRx @barcode = ?, @LocationStr = ?;"
             try:
                 c1.execute(qr, pi)
-                #c1.commit()
+                # c1.commit()
             except pyodbc.Error as err:
                 log.write('Error! %s' % err)
                 log.close()
             rp = c1.fetchall()
-            #print(rp)
+            # print(rp)
             if not rp:
                 QMessageBox.warning(self, 'Warning', 'You have not associated this item in SRx.', QMessageBox.Ok, QMessageBox.Ok)
             elif rp[0][4] is None:
                 QMessageBox.warning(self, 'Warning', 'The Scancode is not associated to any Stock Items for KBMA.', QMessageBox.Ok, QMessageBox.Ok)
             else:
                 rows = c1.execute("exec MSKKBMA.KBMAUpdateDrugBarcodeInfoCollection @BarCode = ?", item)
-                #c1.commit()
+                # c1.commit()
                 try:
                     c1.execute("SET NOCOUNT ON EXEC KBMAGetPI;")
                 except pyodbc.Error as err:
@@ -1131,11 +1066,10 @@ class initUi(QWidget): #setting up UI elements#
                 # print(rf)
                 if rf == 0:
                     # print("No Outstanding Requests.")
-                    QMessageBox.question(self, 'Message', "No Outstanding Requests.", QMessageBox.Ok,
-                                         QMessageBox.Ok)
+                    QMessageBox.question(self, 'Message', "No Outstanding Requests.", QMessageBox.Ok, QMessageBox.Ok)
                     self.piTable.setRowCount(0)
                     self.piTable.setColumnCount(0)
-                    #winsound.PlaySound('done.wav', winsound.SND_ALIAS)
+                    winsound.PlaySound('done.wav', winsound.SND_ALIAS)
                 else:
                     self.piTable.setColumnCount(14)
                     self.piTable.setRowCount(rf)
@@ -1150,13 +1084,11 @@ class initUi(QWidget): #setting up UI elements#
                     self.piTable.setEditTriggers(QAbstractItemView.NoEditTriggers)
                     self.piTable.resizeColumnsToContents()
 
-                    #winsound.PlaySound('another.wav', winsound.SND_ALIAS)
-                    #winsound.PlaySound('airhorn.wav', winsound.SND_ALIAS)
-                    #c1.close()
+                    winsound.PlaySound('another.wav', winsound.SND_ALIAS)
+                    winsound.PlaySound('airhorn.wav', winsound.SND_ALIAS)
+
                     log = open("log.txt", "a+")
-                    log.write(
-                        'Request for Scan ' + item + ' completed on ' + str(
-                            dtm) + " by " + self.user.text() + ".\n")
+                    log.write('Request for Scan ' + item + ' completed on ' + str(dtm) + " by " + self.user.text() + ".\n")
                     log.close()
             c1.commit()
             c1.close()
@@ -1164,18 +1096,17 @@ class initUi(QWidget): #setting up UI elements#
     def parseScan(self):
         global log
         global ws
-        #print(ws)
+        # print(ws)
         nm = QPixmap("NoMatch.png").scaledToHeight(25)
         m = QPixmap("Match.png").scaledToHeight(25)
 
-
-        if len(self.drug.text())!=0 or len(self.mfr.text())!=0 \
-                or len(self.bname.text())!=0 or len(self.str.text())!=0 \
-                or len(self.dform.text())!=0 or len(self.pack.text())!=0:
+        if len(self.drug.text()) != 0 or len(self.mfr.text()) != 0 \
+                or len(self.bname.text()) != 0 or len(self.str.text()) != 0 \
+                or len(self.dform.text()) != 0 or len(self.pack.text()) != 0:
             quest1 = QMessageBox.question(self, "Warning", "You're About to restart the Receiving process.\nAre you sure you want to proceed?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if quest1 == QMessageBox.Yes:
                 log = open('log.txt', 'a+')
-                log.write('Receiving Information for this product was not submitted.\nThe Process was restarted.')
+                log.write('Receiving Information for this product was not submitted. The Process was restarted.\n')
                 log.close()
                 self.ndc.clear()
                 self.srx.clear()
@@ -1209,6 +1140,7 @@ class initUi(QWidget): #setting up UI elements#
             self.lot.clear()
             self.exp.clear()
             scan = self.scan.text()
+            scan = scan.replace('-', '')
             try:
                 bc_10 = (r'(?P<ndc>[0-9]{10})?$')
                 bc_10 = re.compile(bc_10)
@@ -1222,6 +1154,10 @@ class initUi(QWidget): #setting up UI elements#
                 bc_exp_lot = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
                 bc_exp_lot = re.compile(bc_exp_lot)
+
+                bc_cd_exp_lot = (
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
+                bc_cd_exp_lot = re.compile(bc_cd_exp_lot)
 
                 bc_lot_exp = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})?$')
@@ -1257,7 +1193,7 @@ class initUi(QWidget): #setting up UI elements#
                     r'17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
                 lot_exp_bc = re.compile(lot_exp_bc)
                 if not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00')) and (scan.startswith('17') and len(scan) > 10):
-                    if self.sndc.text()!='':
+                    if self.sndc.text() != '':
                         match = lot_exp_bc.match(scan)
                         if 'lot' in match.groupdict():
                             lot = match.group('lot')
@@ -1279,12 +1215,12 @@ class initUi(QWidget): #setting up UI elements#
                         else:
                             exp = ''
                     else:
-                        QMessageBox.warning(self, 'Warning', "You must first scan the NDC barcode.", QMessageBox.Ok,QMessageBox.Ok)
+                        QMessageBox.warning(self, 'Warning', "You must first scan the NDC barcode.", QMessageBox.Ok, QMessageBox.Ok)
                         lot = ''
                         exp = ''
 
                 elif scan.startswith("M"):
-                    QMessageBox.warning(self,"Warning", "Please use the Dispensing Tab for scanning labels", QMessageBox.Ok, QMessageBox.Ok)
+                    QMessageBox.warning(self, "Warning", "Please use the Dispensing Tab for scanning labels", QMessageBox.Ok, QMessageBox.Ok)
                     self.scan.clear()
                     self.scan.setFocus()
                     lot = ''
@@ -1308,6 +1244,8 @@ class initUi(QWidget): #setting up UI elements#
                                                 match = bc_plain1.match(scan)
                                                 if not match:
                                                     match = bc_lot.match(scan)
+                                                    if not match:
+                                                        match = bc_cd_exp_lot.match(scan)
 
                     elif scan.startswith('00') and len(scan) > 10:
                         match = bc_10_1.match(scan)
@@ -1331,57 +1269,60 @@ class initUi(QWidget): #setting up UI elements#
                                 if not match:
                                     match = lot_exp_bc.match(scan)
                     if not match:
-                        QMessageBox.warning(self,'Warning','This is an invalid barcode.\nPlease try scanning another barcode.', QMessageBox.Ok,QMessageBox.Ok)
+                        QMessageBox.warning(self, 'Warning', 'This is an invalid barcode.\nPlease try scanning another barcode.', QMessageBox.Ok, QMessageBox.Ok)
+                        log = open("log.txt", "a+")
+                        log.write("Scancode " + self.scan.text() + " is not a valid scan.\n")
+                        log.close()
                         self.scan.clear()
                         self.srx.clear()
                         self.scan.setFocus()
-                        lot=''
-                        exp=''
+                        ndc = ''
+                        lot = ''
+                        exp = ''
                     else:
                         if 'ndc' in match.groupdict():
                             ndc = match.group('ndc')
                             self.scans1.setText(ndc)
-                            if scan.startswith('3') and len(scan)>10:
-                                self.sndc.setText('3'+ndc)
+                            if scan.startswith('3') and len(scan) > 10:
+                                self.sndc.setText('3' + ndc)
                             else:
                                 self.sndc.setText(ndc)
-                            #print('NDC:', match.group('ndc'))
+                            # print('NDC:', match.group('ndc'))
                         else:
                             pass
                         if 'lot' in match.groupdict():
                             lot = match.group('lot')
-                            #print('Lot:', match.group('lot'))
+                            # print('Lot:', match.group('lot'))
                         else:
                             lot = ''
                         if 'exp' in match.groupdict():
                             if len(match.group('exp')) == 6:
                                 if match.group('exp').endswith('00'):
                                     exp = match.group('exp')[2:4] + "/" + match.group('exp')[0:2]
-                                    #print('Exp:', match.group('exp')[2:4] + "/" + match.group('exp')[0:2])
+                                    # print('Exp:', match.group('exp')[2:4] + "/" + match.group('exp')[0:2])
                                 else:
                                     exp = match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group('exp')[0:2]
-                                    #print('Exp:',match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group('exp')[0:2])
+                                    # print('Exp:',match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group('exp')[0:2])
                             else:
                                 exp = match.group('exp')[0:2] + "/" + match.group('exp')[2:4]
-                                #print('Exp:', match.group('exp')[0:2] + "/" + match.group('exp')[2:4])
+                                # print('Exp:', match.group('exp')[0:2] + "/" + match.group('exp')[2:4])
                         else:
                             exp = ''
 
-
                         if 'serial' in match.groupdict():
                             serial = match.group('serial')
-                            #print('Serial:', match.group('serial'))
+                            # print('Serial:', match.group('serial'))
                         else:
                             serial = ''
 
-                        cnx = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                                             'Server=;'
-                                             # 'Server=;'
+                        cnx = pyodbc.connect('Driver={SQL Server};'
+                                             'Server=SCISTSQLPRI;'
+                                             # 'Server=SCISPSQLPRI;'
                                              'Database=Test;'
                                              # 'Database=Prod;'
                                              'uid=MSKKBMA;'
-                                             'pwd=;')
-                        # 'pwd=;')
+                                             'pwd=KBMA4Test;')
+                        # 'pwd=KBMA4Prod;')
 
                         cursor = cnx.cursor()
                         qb = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifySRx @barcode = ?, @LocationStr = ?;"
@@ -1412,7 +1353,7 @@ class initUi(QWidget): #setting up UI elements#
                                 log.write("Scancode " + scan + " for NDC " + ndc + " not in SRx; New Request needed.\n")
                                 log.close()
                                 self.srx.setText("Not in SRx")
-                                #winsound.PlaySound('buzzer.wav', winsound.SND_ALIAS)
+                                winsound.PlaySound('buzzer.wav', winsound.SND_ALIAS)
                                 self.image_res.setPixmap(nm)
                                 self.image_res.setMaximumWidth(25)
                                 self.drug.setText('')
@@ -1426,13 +1367,10 @@ class initUi(QWidget): #setting up UI elements#
                                 self.search1.setEnabled(True)
                                 self.submitR.setEnabled(False)
                             else:
-                                log.write(
-                                    "A Duplicate Barcode Request for Scancode " + scan + " (NDC " + ndc + ") exists.\n")
+                                log.write("A Duplicate Barcode Request for Scancode " + scan + " (NDC " + ndc + ") exists.\n")
                                 log.close()
-                                #winsound.PlaySound('SystemExclamation', winsound.SND_ALIAS)
-                                QMessageBox.warning(self, 'Duplicate Request',
-                                                    "This Barcode has already been submitted.\nNo further action required.",
-                                                    QMessageBox.Ok, QMessageBox.Ok)
+                                winsound.PlaySound('SystemExclamation', winsound.SND_ALIAS)
+                                QMessageBox.warning(self, 'Duplicate Request', "This Barcode has already been submitted.\nNo further action required.", QMessageBox.Ok, QMessageBox.Ok)
                                 self.scan.clear()
                                 self.sndc.clear()
                                 self.srx.clear()
@@ -1441,12 +1379,10 @@ class initUi(QWidget): #setting up UI elements#
                                 self.submitR.setEnabled(False)
                         else:
                             # print(rc[0][1])
-                            log.write(
-                                "Match Found for Scancode " + scan + " (NDC " + ndc + "): " + rc[0][1] + " by " + rc[0][
-                                    3] + "\n")
+                            log.write("Match Found for Scancode " + scan + " (NDC " + ndc + "): " + rc[0][1] + " by " + rc[0][3] + "\n")
                             log.close()
                             self.srx.setText(rc[0][1] + " by " + rc[0][3])
-                            #winsound.PlaySound('bing.wav', winsound.SND_ALIAS)
+                            winsound.PlaySound('bing.wav', winsound.SND_ALIAS)
                             self.image_res.setPixmap(m)
                             self.image_res.setMaximumWidth(25)
                             self.search1.setEnabled(False)
@@ -1471,32 +1407,32 @@ class initUi(QWidget): #setting up UI elements#
         scan = self.scan2.text()
         nm = QPixmap("NoMatch.png").scaledToHeight(45)
         m = QPixmap("Match.png").scaledToHeight(45)
-        cnx2 = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                              # 'Server=SCISPSQLRDS;'
-                              'Server=;'
+        cnx2 = pyodbc.connect('Driver={SQL Server};'
+                              # 'Server=SCISPSQLPRI;'
+                              'Server=SCISTSQLPRI;'
                               # 'Database=Prod;'
                               'Database=Test;'
                               'UID=MSKKBMA;'
-                              'PWD=;')
-        # 'PWD=;')
-        #sc = str(scan[10:]).lower()
-        #csc = sc.islower()
+                              'PWD=KBMA4Test;')
+        # 'PWD=KBMA4Prod;')
+        # sc = str(scan[10:]).lower()
+        # csc = sc.islower()
         try:
             log = open("log.txt", "a+")
             if scan.startswith('M'):
-                #print('2')
-                if (len(self.res.text())==0 or len(self.lexpi.text())==0):
+                # print('2')
+                if (len(self.res.text()) == 0 or len(self.lexpi.text()) == 0):
                     self.ndc2.clear()
                     self.exp2.clear()
                     self.lot2.clear()
                     self.lastScan.clear()
                     self.srp2.clear()
-                    #print(self.f.count())
+                    # print(self.f.count())
 
                     if len(scan) == 10:
                         mNum = scan
                         self.scan3.setText(mNum)
-                        #scan3 = mNum
+                        # scan3 = mNum
                         doseNum = None
                         self.doseN.setText(doseNum)
                     elif len(scan) > 10:
@@ -1506,26 +1442,25 @@ class initUi(QWidget): #setting up UI elements#
                         self.scan3.setText(mNum)
                     res = []
 
-
                     try:
                         qd = "SET NOCOUNT ON exec MSKKBMA.KBMADisp @MMNum = ?;"
                         cursor2 = cnx2.cursor()
-                        cursor2.execute(qd,mNum)
+                        cursor2.execute(qd, mNum)
                     except pyodbc.Error as err:
 
                         log.write('Error! %s' % err)
                         log.close()
                     row = cursor2.fetchall()
-                    #print(row)
+                    # print(row)
                     if not row:
-                        QMessageBox.warning(self,'Warning', 'The Order scanned is no longer valid.', QMessageBox.Ok, QMessageBox.Ok)
+                        QMessageBox.warning(self, 'Warning', 'The Order scanned is no longer valid.', QMessageBox.Ok, QMessageBox.Ok)
                         self.scan2.clear()
                         self.srx2.clear()
                         self.scan2.setFocus()
                     else:
 
                         for item in row:
-                            #print(item[2])
+                            # print(item[2])
                             if item[1] is None:
                                 orderName = item[0]
                                 self.srx2.setText(item[0])
@@ -1547,21 +1482,21 @@ class initUi(QWidget): #setting up UI elements#
                                         self.lexpi.clear()
                                         self.submitD.setHidden(True)
                                         self.addItem.setHidden(True)
-                        #print(self.res.text())
-                        #print(self.srx2.text())
+                        # print(self.res.text())
+                        # print(self.srx2.text())
                         cursor2.close()
-                        log.write('\n'+"Verifying Order "+ orderName+"\n")
+                        log.write('\n' + "Verifying Order " + orderName + "\n")
                         log.close()
                     self.scan2.clear()
                     self.scan2.setFocus()
-                    #mNum =''
+                    # mNum =''
 
-                elif len(self.lexpi.text())!=0:
+                elif len(self.lexpi.text()) != 0:
                     question = QMessageBox.question(self, 'Message', "Are you sure you want to cancel this dispense action?",
                                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                     if question == QMessageBox.Yes:
                         log.write('Dispensing Information for this order was not submitted.\n')
-                        #log.close()
+                        # log.close()
                         self.ndc2.clear()
                         self.lot2.clear()
                         self.exp2.clear()
@@ -1595,8 +1530,10 @@ class initUi(QWidget): #setting up UI elements#
                         self.scan2.setFocus()
                     self.lastScan.clear()
 
-            #If no M-number has been scanned#
+            # If no M-number has been scanned#
             elif not scan.startswith('M'):
+                scan = scan.replace('-', '')
+
                 bc_10 = (r'(?P<ndc>[0-9]{10})?$')
                 bc_10 = re.compile(bc_10)
 
@@ -1609,6 +1546,10 @@ class initUi(QWidget): #setting up UI elements#
                 bc_exp_lot = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
                 bc_exp_lot = re.compile(bc_exp_lot)
+
+                bc_cd_exp_lot = (
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
+                bc_cd_exp_lot = re.compile(bc_cd_exp_lot)
 
                 bc_lot_exp = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})?$')
@@ -1645,7 +1586,7 @@ class initUi(QWidget): #setting up UI elements#
                 lot_exp_bc = re.compile(lot_exp_bc)
 
                 if (scan.startswith('17') and len(scan) > 10) and not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00')):
-                    #print('nondrugscan')
+                    # print('nondrugscan')
                     if len(self.res.text()) == 0:
                         # print('here')
                         QMessageBox.question(self, 'Message', "You must scan the order label first.",
@@ -1682,10 +1623,10 @@ class initUi(QWidget): #setting up UI elements#
 
                     else:
                         match = lot_exp_bc.match(scan)
-                        #print(match.groupdict())
+                        # print(match.groupdict())
                         if 'lot' in match.groupdict():
                             lot = match.group('lot')
-                            #print('Lot:', match.group('lot'))
+                            # print('Lot:', match.group('lot'))
                         else:
                             lot = ''
                         if 'exp' in match.groupdict():
@@ -1724,10 +1665,9 @@ class initUi(QWidget): #setting up UI elements#
 
 
                 else:
-                    #print('drugscan')
+                    # print('drugscan')
                     try:
-                        if scan.startswith('01') or scan.startswith('(01)') or (
-                                scan.startswith('00') and len(scan) < 11) or (scan.startswith('17') and len(scan) < 11):
+                        if scan.startswith('01') or scan.startswith('(01)') or (scan.startswith('00') and len(scan) < 11) or (scan.startswith('17') and len(scan) < 11):
                             match = bc_10.match(scan)
                             if not match:
                                 match = bc_11.match(scan)
@@ -1743,6 +1683,8 @@ class initUi(QWidget): #setting up UI elements#
                                                     match = bc_plain1.match(scan)
                                                     if not match:
                                                         match = bc_lot.match(scan)
+                                                        if not match:
+                                                            match = bc_cd_exp_lot.match(scan)
 
                         elif scan.startswith('00') and len(scan) > 10:
                             match = bc_10_1.match(scan)
@@ -1756,8 +1698,7 @@ class initUi(QWidget): #setting up UI elements#
                                     if not match:
                                         match = bc_repack_exp1.match(scan)
 
-                        elif not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00') or (
-                                scan.startswith('17') and len(scan) < 11)):
+                        elif not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00') or (scan.startswith('17') and len(scan) < 11)):
                             match = bc_10.match(scan)
                             if not match:
                                 match = bc_11.match(scan)
@@ -1767,28 +1708,30 @@ class initUi(QWidget): #setting up UI elements#
                                         match = lot_exp_bc.match(scan)
 
                         if not match:
-                            QMessageBox.warning(self, 'Warning',
-                                                'This is an invalid barcode.\nPlease try scanning another barcode.',
-                                                QMessageBox.Ok, QMessageBox.Ok)
+                            QMessageBox.warning(self, 'Warning', 'This is an invalid barcode.\nPlease try scanning another barcode.', QMessageBox.Ok, QMessageBox.Ok)
                             self.scan.clear()
                             self.srp2.setText('Last Scan was an Invalid Barcode')
                             self.scan.setFocus()
-                            lot=''
-                            exp =''
+                            lot = ''
+                            exp = ''
                         else:
                             if 'ndc' in match.groupdict():
                                 ndc = match.group('ndc')
-                                # self.sndc.setText(ndc)
+                                self.sndc1 = QLineEdit()
+                                if scan.startswith('3') and len(scan) > 10:
+                                    self.sndc1.setText('3' + ndc)
+                                else:
+                                    self.sndc1.setText(ndc)
 
                             else:
                                 pass
-                            #print('NDC:', ndc)
+                            # print('NDC:', ndc)
                             if 'lot' in match.groupdict():
                                 lot = match.group('lot')
 
                             else:
                                 lot = ''
-                            #print('Lot:', lot)
+                            # print('Lot:', lot)
                             if 'exp' in match.groupdict():
                                 if len(match.group('exp')) == 6:
                                     if match.group('exp').endswith('00'):
@@ -1803,18 +1746,18 @@ class initUi(QWidget): #setting up UI elements#
                                     # print('Exp:', match.group('exp')[0:2] + "/" + match.group('exp')[2:4])
                             else:
                                 exp = ''
-                            #print('Exp:', exp)
+                            # print('Exp:', exp)
                             if 'serial' in match.groupdict():
                                 serial = match.group('serial')
                                 # print('Serial:', match.group('serial'))
                             else:
                                 serial = ''
-                            #print('Serial:', serial)
-                            #log = open('log.txt', 'a+')
+                            # print('Serial:', serial)
+                            # log = open('log.txt', 'a+')
                             if ndc in self.res.text():
-                                #print('found')
+                                # print('found')
                                 log.write('Correct Scan ' + scan + "\n")
-                                #winsound.PlaySound('bing.wav', winsound.SND_ALIAS)
+                                winsound.PlaySound('bing.wav', winsound.SND_ALIAS)
                                 self.image_res2.setPixmap(m)
                                 self.image_res2.setMaximumWidth(45)
                                 self.lastScan.setText("P")
@@ -1837,35 +1780,35 @@ class initUi(QWidget): #setting up UI elements#
                                     n4.setText(lot)
                                     n5.setText(exp)
                             else:
-                                #winsound.PlaySound('buzzer.wav', winsound.SND_ALIAS)
+                                winsound.PlaySound('buzzer.wav', winsound.SND_ALIAS)
                                 self.image_res2.setPixmap(nm)
                                 self.image_res2.setMaximumWidth(45)
                                 self.lastScan.setText("F")
                                 log.write('Incorrect Scan ' + ndc + '\n')
 
-                            dl = (datetime.datetime.now(), self.scan3.text(), self.doseN.text(), str(ndc), lot, exp, self.user.text(),self.lastScan.text())
-                            #print(dl)
+                            dl = (datetime.datetime.now(), self.scan3.text(), self.doseN.text(), str(ndc), lot, exp, self.user.text(), self.lastScan.text())
+                            # print(dl)
                             try:
                                 q2 = "exec KBMADispR @createdwhen = ?, @MMNum = ?, @dose = ?, @NDC = ?, @Lot = ?, @Exp = ?, @User = ?, @ScanStatus = ?;"
                                 cn2 = cnx2.cursor()
                                 cn2.execute(q2, dl)
                                 cn2.commit()
                                 qb = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifySRx @barcode = ?, @LocationStr = ?;"
-                                pb = (ndc, ws)
+                                pb = (self.sndc1.text(), ws)
                                 cn2.execute(qb, pb)
                             except pyodbc.Error as err:
-                                #print(err)
+                                # print(err)
                                 log.write('Error! %s' % err)
                                 log.close()
                             rc6 = cn2.fetchall()
-                            #print(rc6)
+                            # print(rc6)
                             if not rc6:
                                 QMessageBox.warning(self, 'Warning',
                                                     'This Scancode is not associated to any Products in SRx.\nPlease use the Receiving Tab to send information to PI group.',
                                                     QMessageBox.Ok, QMessageBox.Ok)
                                 log.write('Scan not in SRx ' + ndc + ' \n')
                                 log.close()
-                                self.srp2.setText("Last Scanned Product not in SRx")
+                                self.srp2.setText("Last Scanned Barcode not in SRx")
 
                             else:
                                 self.srp2.setText(rc6[0][1] + " by " + rc6[0][3])
@@ -1886,7 +1829,6 @@ class initUi(QWidget): #setting up UI elements#
             log.write('Error:', traceback.format_exc())
             log.close()
 
-
         self.scan2.selectAll()
         self.scan2.setFocus()
 
@@ -1904,6 +1846,7 @@ class initUi(QWidget): #setting up UI elements#
             self.psScan.clear()
             self.psScan.setFocus()
         else:
+            scan = scan.replace('-', '')
             if len(scan) > 10 and scan.startswith('00'):
                 self.ndc3.setText(scan[1:])
             elif scan.startswith('3'):
@@ -1928,7 +1871,7 @@ class initUi(QWidget): #setting up UI elements#
             # print(cps)
             param3 = {"labeltype": "all", "query": cps}
             r = requests.get("https://dailymed.nlm.nih.gov/dailymed/search.cfm", params=param3)
-            #print(r.url)
+            # print(r.url)
             o = urlparse(r.url).query
             q = o.replace("setid=", '')
             # print(o)
@@ -1945,7 +1888,7 @@ class initUi(QWidget): #setting up UI elements#
                 if mdt == '':
                     self.psResult.setText('Response from DailyMed: No Drug Package Labels found.')
                     log = open("log.txt", "a+")
-                    log.write("Response from DailyMed: No Drug Package Labels found." + "\n")
+                    log.write("Response from DailyMed: No Drug Package Labels found for PS80 Check." + "\n")
                     log.close()
                     # QMessageBox.warning(self, 'Warning',"No Drug Package Information found.",QMessageBox.Ok, QMessageBox.Ok)
                 else:
@@ -1965,22 +1908,14 @@ class initUi(QWidget): #setting up UI elements#
                                 self.psImage.setPixmap(psnf)
                                 self.psImage.setMaximumWidth(25)
                             else:
-                                QMessageBox.warning(self, 'Information',
-                                                    'This product contains ' + str(ps2[0]).capitalize(),
-                                                    QMessageBox.Ok,
-                                                    QMessageBox.Ok)
+                                QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps2[0]).capitalize(), QMessageBox.Ok, QMessageBox.Ok)
                                 self.psImage.clear()
                         else:
-                            QMessageBox.warning(self, 'Information',
-                                                'This product contains ' + str(ps1[0]).capitalize(),
-                                                QMessageBox.Ok,
-                                                QMessageBox.Ok)
+                            QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps1[0]).capitalize(), QMessageBox.Ok, QMessageBox.Ok)
                             self.psImage.clear()
 
                     else:
-                        QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps[0]).capitalize(),
-                                            QMessageBox.Ok,
-                                            QMessageBox.Ok)
+                        QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps[0]).capitalize(), QMessageBox.Ok, QMessageBox.Ok)
                         self.psImage.clear()
             else:
                 ps = soup2.find_all(string='POLYSORBATE 80')
@@ -1996,41 +1931,35 @@ class initUi(QWidget): #setting up UI elements#
                             self.psImage.setPixmap(psnf)
                             self.psImage.setMaximumWidth(25)
                         else:
-                            QMessageBox.warning(self, 'Information',
-                                                'This product contains ' + str(ps2[0]).capitalize(),
-                                                QMessageBox.Ok,
-                                                QMessageBox.Ok)
+                            QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps2[0]).capitalize(), QMessageBox.Ok, QMessageBox.Ok)
                             self.psImage.clear()
 
                     else:
-                        QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps1[0]).capitalize(),
-                                            QMessageBox.Ok,
-                                            QMessageBox.Ok)
+                        QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps1[0]).capitalize(), QMessageBox.Ok, QMessageBox.Ok)
                         self.psImage.clear()
 
                 else:
-                    QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps[0]).capitalize(),
-                                        QMessageBox.Ok,
-                                        QMessageBox.Ok)
+                    QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps[0]).capitalize(), QMessageBox.Ok, QMessageBox.Ok)
                     self.psImage.clear()
             # ndc = ''
             self.ndc3.clear()
             self.psScan.clear()
+            self.psScan.setFocus()
 
     def submitDisp(self):
         global log
         global sdt
         q2 = "exec KBMADispR @createdwhen = ?, @MMNum = ?, @dose = ?, @NDC = ?, @Lot = ?, @Exp = ?, @User = ?, @ScanStatus = ?;"
-        if len(self.lot2.text())==0 or len(self.exp2.text())==0:
+        if len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0:
             QMessageBox.warning(self, "Warning", "All fields must have a value.", QMessageBox.Ok, QMessageBox.Ok)
             self.scan2.selectAll()
             self.scan2.setFocus()
-        elif self.f.count() == 22 and (len(self.lot2.text())==0 or len(self.exp2.text())==0 or len(self.f.itemAt(19).widget().text())==0 or len(self.f.itemAt(21).widget().text())==0):
+        elif self.f.count() == 22 and (len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0 or len(self.f.itemAt(19).widget().text()) == 0 or len(self.f.itemAt(21).widget().text()) == 0):
             QMessageBox.warning(self, "Warning", "All fields must have a value.", QMessageBox.Ok, QMessageBox.Ok)
             self.scan2.selectAll()
             self.scan2.setFocus()
-        elif self.f.count() > 22 and (len(self.lot2.text())==0 or len(self.exp2.text())==0 or len(self.f.itemAt(19).widget().text())==0 or len(self.f.itemAt(21).widget().text())==0 or len(self.f.itemAt(25).widget().text())==0 or len(self.f.itemAt(27).widget().text())==0):
-            QMessageBox.warning(self, "Warning", "All fields must have a value.", QMessageBox.Ok,QMessageBox.Ok)
+        elif self.f.count() > 22 and (len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0 or len(self.f.itemAt(19).widget().text()) == 0 or len(self.f.itemAt(21).widget().text()) == 0 or len(self.f.itemAt(25).widget().text()) == 0 or len(self.f.itemAt(27).widget().text()) == 0):
+            QMessageBox.warning(self, "Warning", "All fields must have a value.", QMessageBox.Ok, QMessageBox.Ok)
             self.scan2.selectAll()
             self.scan2.setFocus()
         elif self.lastScan.text() == "F":
@@ -2041,14 +1970,14 @@ class initUi(QWidget): #setting up UI elements#
         else:
             s1 = [datetime.datetime.now(), self.scan3.text(), self.doseN.text(), self.ndc2.text(), self.lot2.text(), self.exp2.text(), self.user.text(), self.lastScan.text()]
 
-            cdisp = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                                 'Server=;'
-                                 #'Server=;'
-                                 'Database=Test;'
-                                 #'Database=Prod;'
-                                 'uid=MSKKBMA;'
-                                 'pwd=;')
-                                 #'pwd=;')
+            cdisp = pyodbc.connect('Driver={SQL Server};'
+                                   'Server=SCISTSQLPRI;'
+                                   # 'Server=SCISPSQLPRI;'
+                                   'Database=Test;'
+                                   # 'Database=Prod;'
+                                   'uid=MSKKBMA;'
+                                   'pwd=KBMA4Test;')
+            # 'pwd=KBMA4Prod;')
             try:
                 cd = cdisp.cursor()
                 cd.execute(q2, s1)
@@ -2058,20 +1987,20 @@ class initUi(QWidget): #setting up UI elements#
                     s1[3] = self.f.itemAt(17).widget().text()
                     s1[4] = self.f.itemAt(19).widget().text()
                     s1[5] = self.f.itemAt(21).widget().text()
-                    #print(s1)
+                    # print(s1)
                     cd.execute(q2, s1)
                     cd.commit()
-                elif self.f.count()>22:
+                elif self.f.count() > 22:
                     s1[3] = self.f.itemAt(17).widget().text()
                     s1[4] = self.f.itemAt(19).widget().text()
                     s1[5] = self.f.itemAt(21).widget().text()
-                    #print(s1)
+                    # print(s1)
                     rows = cd.execute(q2, s1)
                     cd.commit()
                     s1[3] = self.f.itemAt(23).widget().text()
                     s1[4] = self.f.itemAt(25).widget().text()
                     s1[5] = self.f.itemAt(27).widget().text()
-                    #print(s1)
+                    # print(s1)
                     cd.execute(q2, s1)
                     cd.commit()
             except pyodbc.Error as err:
@@ -2079,27 +2008,26 @@ class initUi(QWidget): #setting up UI elements#
                 log.write('Error! %s' % err)
                 log.close()
             cd.close()
-            log = open("log.txt","a+")
-            log.write("Dispensing Information submitted for order "+self.srx2.text()+", dose # "+self.doseN.text()+" on "+
-                      str(sdt)+" by "+self.user.text()+"\n")
+            log = open("log.txt", "a+")
+            log.write("Dispensing Information submitted for order " + self.srx2.text() + ", dose # " + self.doseN.text() + " on " + str(sdt) + " by " + self.user.text() + "\n")
             log.close()
             self.ndc2.clear()
             self.lot2.clear()
             self.exp2.clear()
             self.image_res2.clear()
             self.scan3.clear()
-            mNum =''
+            mNum = ''
             item = 16
             while item in range(self.f.count()):
-                #item += 1
+                # item += 1
                 self.it = self.f.itemAt(item).widget()
                 self.f.removeWidget(self.it)
                 self.it.deleteLater()
                 self.ndcLine = 4
                 del self.it
-                #item += 1
+                # item += 1
 
-            #print(self.f.count())
+            # print(self.f.count())
             self.res.clear()
             self.scan2.clear()
             self.srx2.clear()
@@ -2113,14 +2041,14 @@ class initUi(QWidget): #setting up UI elements#
         global ws
         global log
         rscan = self.rejScan.text()
-        rejcnx = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                               'Server=;'
-                               #'Server=;'
-                               'Database=Test;'
-                               #'Database=Prod;'
-                               'uid=MSKKBMA;'
-                               'pwd=;')
-                               #'pwd=;')
+        rejcnx = pyodbc.connect('Driver={SQL Server};'
+                                'Server=SCISTSQLPRI;'
+                                # 'Server=SCISPSQLPRI;'
+                                'Database=Test;'
+                                # 'Database=Prod;'
+                                'uid=MSKKBMA;'
+                                'pwd=KBMA4Test;')
+        # 'pwd=KBMA4Prod;')
         log = open("log.txt", "a+")
         if len(self.rejResult.text()) == 0:
             if rscan.startswith("M"):
@@ -2166,28 +2094,27 @@ class initUi(QWidget): #setting up UI elements#
                 else:
                     self.rejSub.setEnabled(True)
                     for item in row:
-                        print(item[0],item[1])
+                        # print(item[0],item[1])
                         self.rejType.setText("Order")
                         if item[1] is None:
                             orderName = item[0]
                             self.rejResult.setText(item[0])
                         else:
                             orderName = item[0] + ' ' + item[1]
-                            self.rejResult.setText(item[0] + ' ' + item[1])
-                        #res.append(str(item[2]))
-                        #self.res.setText(', '.join(res))
+                            self.rejResult.setText(str(item[0]) + ' ' + str(item[1]))
+                        # res.append(str(item[2]))
+                        # self.res.setText(', '.join(res))
                         self.rejDoseQty.setText(str(item[3]))
-                        self.rejDoseUom.setText(item[4])
-                        self.rejDesc.setText(item[5])
-                        self.rejPtLoc.setText(item[6])
-                    print(self.res.text())
-                    print(self.rejDoseQty.text())
-                    print(self.rejDoseUom.text())
-                    print(self.rejDesc.text())
-                    print(self.rejPtLoc.text())
+                        self.rejDoseUom.setText(str(item[4]))
+                        self.rejDesc.setText(str(item[5]))
+                        self.rejPtLoc.setText(str(item[6]))
+                    # print(self.res.text())
+                    # print(self.rejDoseQty.text())
+                    # print(self.rejDoseUom.text())
+                    # print(self.rejDesc.text())
+                    # print(self.rejPtLoc.text())
                     # print(self.srx2.text())
                     rcursor2.close()
-
             else:
                 self.rejType.setText("Batch")
                 self.rejLotLabel.setVisible(True)
@@ -2210,11 +2137,11 @@ class initUi(QWidget): #setting up UI elements#
                     QMessageBox.warning(self, 'Warning',
                                         'This Scancode is not associated to any Products in SRx.\nPlease use the Receiving Tab to send information to PI group.',
                                         QMessageBox.Ok, QMessageBox.Ok)
-                    #self.rejResult.setText("Last Scanned Product not in SRx")
+                    # self.rejResult.setText("Last Scanned Product not in SRx")
 
                 else:
                     self.rejSub.setEnabled(True)
-                    self.rejResult.setText(rc6[0][1] + " by " + rc6[0][3])
+                    self.rejResult.setText(str(rc6[0][1]) + " by " + str(rc6[0][3]))
                     self.rejDoseQty.setText("")
                     self.rejDoseUom.setText("")
                     self.rejDesc.setText("")
@@ -2247,32 +2174,30 @@ class initUi(QWidget): #setting up UI elements#
     def rejSubmit(self):
         global u
         rejcnx = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                                #'Server=;'
-                                # 'Server=;'
+                                # 'Server=SCISTSQLPRI;'
+                                # 'Server=SCISPSQLPRI;'
                                 'Server=WMEDE002\MSKCC;'
-                                #'Database=Test;'
+                                # 'Database=Test;'
                                 # 'Database=Prod;'
                                 'Database=PRODNF;'
-                                #'uid=MSKKBMA;'
-                                #'pwd=;')
+                                # 'uid=MSKKBMA;'
+                                # 'pwd=KBMA4Test;')
                                 'Trusted_Connection=yes;')
-        # 'pwd=;')
+        # 'pwd=KBMA4Prod;')
         rq = "Insert into RejectionReport VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         rcomm = self.rejComField.toPlainText()
 
         if self.rejType.text() == "Batch" and (self.rejLotField.text() == "" or self.rejExpField.text() == ""):
-            QMessageBox.warning(self, 'Warning', 'Lot and/or Expiration information is missing.', QMessageBox.Ok,
-                                QMessageBox.Ok)
+            QMessageBox.warning(self, 'Warning', 'Lot and/or Expiration information is missing.', QMessageBox.Ok, QMessageBox.Ok)
         elif self.reasonDrop.currentText() == "Other" and rcomm == "":
-            QMessageBox.warning(self, 'Warning', 'Please enter a Comment for this reason.', QMessageBox.Ok,
-                                QMessageBox.Ok)
+            QMessageBox.warning(self, 'Warning', 'Please enter a Comment for this reason.', QMessageBox.Ok, QMessageBox.Ok)
         else:
-            print(datetime.datetime.now(), u
+            '''print(datetime.datetime.now(), u
                   , self.rejType.text(), self.reasonDrop.currentText(),
                   self.rejScan.text(), self.rejResult.text(), self.rejDesc.text(),
                   rcomm,
                   self.rdoseNum.text(), self.rejDoseQty.text(), self.rejDoseUom.text(), self.rejPtLoc.text(),
-                  self.rejLotField.text(), self.rejExpField.text())
+                  self.rejLotField.text(), self.rejExpField.text())'''
             rp = (datetime.datetime.now(), u
                   , self.rejType.text(), self.reasonDrop.currentText(),
                   self.rejScan.text(), self.rejResult.text(), self.rejDesc.text(),
@@ -2280,7 +2205,7 @@ class initUi(QWidget): #setting up UI elements#
                   self.rdoseNum.text(), self.rejDoseQty.text(), self.rejDoseUom.text(), self.rejPtLoc.text(),
                   self.rejLotField.text(), self.rejExpField.text())
             recrej = rejcnx.cursor()
-            recrej.execute(rq,rp)
+            recrej.execute(rq, rp)
             recrej.commit()
             recrej.close()
             if self.reasonDrop.currentText() == "Wrong Drug":
@@ -2292,7 +2217,7 @@ class initUi(QWidget): #setting up UI elements#
                         """This is a test from my Python app!
     
                         Submitted by: {}@mskcc.org
-                        Order Scan: {} 
+                        Product Scan: {} 
                         Rejection Type: {} 
                         Rejection Reason: {}
                         Rejected Order: {}
@@ -2301,10 +2226,8 @@ class initUi(QWidget): #setting up UI elements#
                         Order Dose Qty: {}
                         Order Dose UoM: {}
                         Patient Current Location: {}
-                        Comments: {} """.format(u, self.rejScan.text(), self.rejType.text(),
-                                                self.reasonDrop.currentText(),
-                                                self.rejResult.text(), self.rejDesc.text(), self.rdoseNum.text(),
-                                                self.rejDoseQty.text(),
+                        Comments: {} """.format(u, self.rejScan.text(), self.rejType.text(), self.reasonDrop.currentText(),
+                                                self.rejResult.text(), self.rejDesc.text(), self.rdoseNum.text(), self.rejDoseQty.text(),
                                                 self.rejDoseUom.text(), self.rejPtLoc.text(), rcomm)
                 elif self.rejType.text() == "Batch":
                     message = \
@@ -2317,10 +2240,8 @@ class initUi(QWidget): #setting up UI elements#
                         Rejected Product: {}
                         Batch Lot: {}
                         Batch Exp: {}
-                        Comments: {} """.format(u, self.rejScan.text(), self.rejType.text(),
-                                                self.reasonDrop.currentText(),
-                                                self.rejResult.text(), self.rejLotField.text(), self.rejExpField.text(),
-                                                rcomm)
+                        Comments: {} """.format(u, self.rejScan.text(), self.rejType.text(), self.reasonDrop.currentText(),
+                                                self.rejResult.text(), self.rejLotField.text(), self.rejExpField.text(), rcomm)
 
                 try:
                     message = MIMEText(message)
@@ -2348,14 +2269,13 @@ class initUi(QWidget): #setting up UI elements#
             self.rejSub.setEnabled(False)
             self.rejScan.setFocus()
 
-
     def Dispensed(self):
         pandas.set_option('display.max_rows', 150000)
         pandas.set_option('display.max_columns', 10)
         pandas.set_option('display.width', 100000)
 
-        cnx = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                             'Server=;'
+        cnx = pyodbc.connect('Driver={SQL Server};'
+                             'Server=SCISTSQLPRI;'
                              'Database=Test;'
                              'Trusted_Connection=yes;')
 
@@ -2371,7 +2291,7 @@ class initUi(QWidget): #setting up UI elements#
         df = DataFrame(q1).fillna('')
         # print(df)
         if df.empty:
-            #return False
+            # return False
             QMessageBox.information(self, 'Message', "Nothing to Report", QMessageBox.Ok, QMessageBox.Ok)
         else:
             clist = []
@@ -2424,29 +2344,30 @@ class initUi(QWidget): #setting up UI elements#
             # pg = document.add_paragraph(str(df))
             document.save('text.docx')
             os.system('text.docx')
-        #report = Reporting.Dispensing(self)
-        #print(report)
-        #if report == False:
-            #QMessageBox.information(self,'Message', "Nothing to Report", QMessageBox.Ok, QMessageBox.Ok)
-        #else:
-            QMessageBox.information(self,'Message', "Report Printed", QMessageBox.Ok, QMessageBox.Ok)
+            # report = Reporting.Dispensing(self)
+            # print(report)
+            # if report == False:
+            # QMessageBox.information(self,'Message', "Nothing to Report", QMessageBox.Ok, QMessageBox.Ok)
+            # else:
+            QMessageBox.information(self, 'Message', "Report Printed", QMessageBox.Ok, QMessageBox.Ok)
 
-#to start the application#
+
+# to start the application#
 if __name__ == "__main__":
     import sys
 
+    # pyglet.app.run()
     app = QApplication(sys.argv)
     login = loginWindow()
     app.setWindowIcon(QIcon("icon.png"))
     # Set App Icon in Taskbar #
-    #myApp = "mskrx"
-    #ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myApp)
+    myApp = "PharmOps"
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myApp)
 
     # show app in tray icon area #
-    #trayIcon = QSystemTrayIcon(QIcon("icon.png"))
-    #trayIcon.show()
+    # trayIcon = QSystemTrayIcon(QIcon("icon.png"))
+    # trayIcon.show()
     if login.exec_() == QDialog.Accepted:
         window = mainWindow()
         window.show()
-
-        sys.exit(app.exec_())
+        sys.exit(app.exec())
