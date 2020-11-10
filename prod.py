@@ -14,9 +14,9 @@ import pandas as pd
 import fileinput
 from ldap3 import Server, Connection, ALL
 from pandas import *
-import docx
-from docx import exceptions
-import xlrd
+# import docx
+# from docx import exceptions
+# import xlrd
 from docx.shared import Pt
 from docx.enum.section import *
 from docx.enum.text import *
@@ -35,6 +35,7 @@ u=''
 loc=''
 num=''
 scan = ''
+email = ''
 log = "log.txt"
 sdt = datetime.datetime.now()
 w = socket.gethostname()
@@ -64,6 +65,7 @@ class loginWindow(QDialog):
         global admin
         global loc
         global num
+        global email
         u = self.loginUser.text()
         p = self.loginPass.text()
         locnum = pd.read_excel("WS.xlsx", sheet_name="Pharm WS Info")
@@ -73,17 +75,22 @@ class loginWindow(QDialog):
                                 QMessageBox.Ok, QMessageBox.Ok)
             loc = 'Unassigned WS'
             num = '999-999-9999'
-        elif locnum.loc[locnum['WSID'] == ws, 'Contact#'].empty and locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]:
-            loc = locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]
-            num = '999-999-9999'
-        elif locnum.loc[locnum['WSID'] == ws, 'Area'].empty and locnum.loc[locnum['WSID'] == ws, 'Contact#'].iloc[0]:
-            loc = 'Unassigned WS'
-            num = locnum.loc[locnum['WSID'] == ws, 'Contact#'].iloc[0]
+            email = 'zzPDL_PHA_Informatics'
         else:
-            loc = locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]
-            num = locnum.loc[locnum['WSID'] == ws, 'Contact#'].iloc[0]
-        if p != '':
+            if locnum.loc[locnum['WSID'] == ws, 'email'].empty:
+                email = 'zzPDL_PHA_Informatics'
+            else:
+                email = locnum.loc[locnum['WSID'] == ws, 'email'].iloc[0]
+            if locnum.loc[locnum['WSID'] == ws, 'Contact#'].empty:
+                num = '999-999-9999'
+            else:
+                num = locnum.loc[locnum['WSID'] == ws, 'Contact#'].iloc[0]
+            if locnum.loc[locnum['WSID'] == ws, 'Area'].empty:
+                loc = 'Unassigned WS'
+            else:
+                loc = locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]
 
+        if p != '':
             server = Server(host='MSKCC.ROOT.MSKCC.ORG', use_ssl=True, get_info=ALL)
             conn = Connection(server, user='MSKCC\\' + u, password=p)
             p = ''
@@ -114,9 +121,7 @@ class loginWindow(QDialog):
                 conn.password = ''
                 p = ''
                 log = open("log.txt", "a+")
-                log.write("\n" + "Session started at " + str(
-                    sdt) + " by user " + u + " from Workstation " + ws + ", located at " + loc + "; Phone: " + str(
-                    num) + "\n")
+                log.write("\nSession started at " + str(sdt) + " by user " + u + " from Workstation " + ws + ", located at " + loc + "; Phone: " + str(num) + ";email: " + email + "\n")
                 log.close()
 
         else:
@@ -154,7 +159,6 @@ class initUi(QWidget): #setting up UI elements#
         global admin
         global loc
         global num
-
 
         self.loc.setText(loc)
         self.phone.setText(str(num))
@@ -475,7 +479,6 @@ class initUi(QWidget): #setting up UI elements#
         self.scan.setFocus()  # bring cursor to scan field upon start#
         self.show()
 
-
     def closeApp(self):
         global run
         global val
@@ -483,7 +486,6 @@ class initUi(QWidget): #setting up UI elements#
         #app.exec()
         sys.exit()
         #app.exec_()
-
 
     def addMoreItems(self):
         if len(self.ndc2.text()) == 0:
@@ -503,7 +505,7 @@ class initUi(QWidget): #setting up UI elements#
             QMessageBox.warning(self, "Warning", "You must record all information before adding more products.",QMessageBox.Ok, QMessageBox.Ok)
             self.scan2.selectAll()
         elif self.ndcLine == 6:
-            QMessageBox.warning(self, "Warning", "No more than 3 different Lots can be recorded.", QMessageBox.Ok,QMessageBox.Ok)
+            QMessageBox.warning(self, "Warning", "No more than 3 different Lots can be recorded.",QMessageBox.Ok,QMessageBox.Ok)
             self.scan2.selectAll()
         else:
             i = self.ndcCount
@@ -802,7 +804,7 @@ class initUi(QWidget): #setting up UI elements#
         self.submitR.setEnabled(True)
 
     def submitReq(self):
-        global u
+        global u, email
         loc = self.loc.text()
         num = self.phone.text().strip()
         if len(self.sndc.text())==0 or len(self.drug.text())==0 or len(self.mfr.text())==0\
@@ -853,7 +855,7 @@ class initUi(QWidget): #setting up UI elements#
                  self.pack.text(),
                  self.user.text(),
                  self.phone.text(),
-                 self.loc.text()]
+                 email]
                  #self.user.text()+'@mskcc.org']
             cnx0 = pyodbc.connect('Driver={SQL Server};'
                             #'Server=SCISTSQLPRI;'
@@ -864,17 +866,16 @@ class initUi(QWidget): #setting up UI elements#
                             #'pwd=KBMA4Test;')
                             'pwd=KBMA4Prod;')
 
-
             c0 = cnx0.cursor()
             rows = c0.execute('exec MSKKBMA.KBMASaveDrugBarcodeInfoCollection '
                               '@BarCode = ?, '
                               '@NDC_Num = ?, '
                               '@DrugName = ?, '
                               '@BrandName = ?, '
-                              '@Manufacturer = ?, ' 
+                              '@Manufacturer = ?, '
                               '@StrConcentration = ?, '
                               '@DosageForm = ?, '
-                              '@TotalVolume = ?, ' 
+                              '@TotalVolume = ?, '
                               '@EnterBy = ?, '
                               '@Phone_Num = ?, '
                               '@EmailStr = ?;', s)
@@ -904,7 +905,6 @@ class initUi(QWidget): #setting up UI elements#
         alexp = open('lexp.txt',"a+")
         alexp.write('\n'+self.newLexp.text())
         alexp.close()
-
 
         log = open("log.txt", "a+")
         log.write("New Item added: " + self.newLexp.text() + "\n")
@@ -1101,15 +1101,15 @@ class initUi(QWidget): #setting up UI elements#
         # print(ws)
         nm = QPixmap("NoMatch.png").scaledToHeight(25)
         m = QPixmap("Match.png").scaledToHeight(25)
-
+        log = open('log.txt', 'a+')
         if len(self.drug.text()) != 0 or len(self.mfr.text()) != 0 \
                 or len(self.bname.text()) != 0 or len(self.str.text()) != 0 \
                 or len(self.dform.text()) != 0 or len(self.pack.text()) != 0:
-            quest1 = QMessageBox.question(self, "Warning","You're About to restart the Receiving process.\nAre you sure you want to proceed?",QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            quest1 = QMessageBox.question(self, "Warning","You're about to restart the Receiving process.\nAre you sure you want to proceed?",QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if quest1 == QMessageBox.Yes:
-                log = open('log.txt', 'a+')
+
                 log.write('Receiving Information for this product was not submitted. The Process was restarted.\n')
-                log.close()
+                #log.close()
                 self.ndc.clear()
                 self.srx.clear()
                 self.mfr.clear()
@@ -1166,8 +1166,16 @@ class initUi(QWidget): #setting up UI elements#
                 bc_lot_exp = re.compile(bc_lot_exp)
 
                 bc_serial_lot_exp = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})21(?P<serial>[0-9,A-Z]{10,12})(17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20}))?$')
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})21(?P<serial>[0-9,A-Z]{10,14})(17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20}))?$')
                 bc_serial_lot_exp = re.compile(bc_serial_lot_exp)
+
+                bc_exp_lot_serial = (
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})21(?P<serial>[0-9,A-Z]{10,14})?$')
+                bc_exp_lot_serial = re.compile(bc_exp_lot_serial)
+
+                bc_lot_exp_serial = (
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})21(?P<serial>[0-9,A-Z]{10,14})?$')
+                bc_lot_exp_serial = re.compile(bc_lot_exp_serial)
 
                 bc_plain = (r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})?$')
                 bc_plain = re.compile(bc_plain)
@@ -1229,8 +1237,7 @@ class initUi(QWidget): #setting up UI elements#
                     exp = ''
 
                 else:
-                    if scan.startswith('01') or scan.startswith('(01)') or (
-                            scan.startswith('00') and len(scan) < 11) or (scan.startswith('17') and len(scan) < 11):
+                    if scan.startswith('01') or scan.startswith('(01)') or (scan.startswith('00') and len(scan) < 11) or (scan.startswith('17') and len(scan) < 11):
                         match = bc_10.match(scan)
                         if not match:
                             match = bc_11.match(scan)
@@ -1239,15 +1246,19 @@ class initUi(QWidget): #setting up UI elements#
                                 if not match:
                                     match = bc_serial_lot_exp.match(scan)
                                     if not match:
-                                        match = bc_exp_lot.match(scan)
+                                        match = bc_lot_exp_serial.match(scan)
                                         if not match:
-                                            match = bc_plain.match(scan)
+                                            match = bc_exp_lot_serial.match(scan)
                                             if not match:
-                                                match = bc_plain1.match(scan)
+                                                match = bc_exp_lot.match(scan)
                                                 if not match:
-                                                    match = bc_lot.match(scan)
+                                                    match = bc_plain.match(scan)
                                                     if not match:
-                                                        match = bc_cd_exp_lot.match(scan)
+                                                        match = bc_plain1.match(scan)
+                                                        if not match:
+                                                            match = bc_lot.match(scan)
+                                                            if not match:
+                                                                match = bc_cd_exp_lot.match(scan)
 
                     elif scan.startswith('00') and len(scan) > 10:
                         match = bc_10_1.match(scan)
@@ -1272,9 +1283,9 @@ class initUi(QWidget): #setting up UI elements#
                                     match = lot_exp_bc.match(scan)
                     if not match:
                         QMessageBox.warning(self, 'Warning','This is an invalid barcode.\nPlease try scanning another barcode.',QMessageBox.Ok, QMessageBox.Ok)
-                        log = open("log.txt", "a+")
+                        #log = open("log.txt", "a+")
                         log.write("Scancode " + self.scan.text() + " is not a valid scan.\n")
-                        log.close()
+                        #log.close()
                         self.scan.clear()
                         self.srx.clear()
                         self.scan.setFocus()
@@ -1333,13 +1344,13 @@ class initUi(QWidget): #setting up UI elements#
                         try:
                             cursor.execute(qb, pb)
                         except pyodbc.Error as err:
-                            log = open("log.txt", "a+")
+                            #log = open("log.txt", "a+")
                             log.write('Error! %s' % err)
-                            log.close()
+                            #log.close()
                         rc = cursor.fetchall()
                         # print(rc)
                         # setting up results #
-                        log = open("log.txt", "a+")
+                        #log = open("log.txt", "a+")
                         # log.write("Verifying in SRx for "+ndc+"\n")
 
                         if not rc:
@@ -1348,12 +1359,12 @@ class initUi(QWidget): #setting up UI elements#
                                 cursor.execute(qr, self.sndc.text())
                             except pyodbc.Error as err:
                                 log.write('Error! %s' % err)
-                                log.close()
+                                #log.close()
                             rb = cursor.fetchall()
                             # print(rb[0][0])
                             if rb[0][0] == 0:
                                 log.write("Scancode " + scan + " for NDC " + ndc + " not in SRx; New Request needed.\n")
-                                log.close()
+                                #log.close()
                                 self.srx.setText("Not in SRx")
                                 winsound.PlaySound('buzzer.wav', winsound.SND_ALIAS)
                                 self.image_res.setPixmap(nm)
@@ -1370,7 +1381,7 @@ class initUi(QWidget): #setting up UI elements#
                                 self.submitR.setEnabled(False)
                             else:
                                 log.write("A Duplicate Barcode Request for Scancode " + scan + " (NDC " + ndc + ") exists.\n")
-                                log.close()
+                                #log.close()
                                 winsound.PlaySound('SystemExclamation', winsound.SND_ALIAS)
                                 QMessageBox.warning(self, 'Duplicate Request',"This Barcode has already been submitted.\nNo further action required.",QMessageBox.Ok, QMessageBox.Ok)
                                 self.scan.clear()
@@ -1382,7 +1393,7 @@ class initUi(QWidget): #setting up UI elements#
                         else:
                             # print(rc[0][1])
                             log.write("Match Found for Scancode " + scan + " (NDC " + ndc + "): " + rc[0][1] + " by " + rc[0][3] + "\n")
-                            log.close()
+                            #log.close()
                             self.srx.setText(rc[0][1] + " by " + rc[0][3])
                             winsound.PlaySound('bing.wav', winsound.SND_ALIAS)
                             self.image_res.setPixmap(m)
@@ -1396,7 +1407,8 @@ class initUi(QWidget): #setting up UI elements#
                 self.lot.setText(lot)
                 self.exp.setText(exp)
             except Exception as e:
-                print('Error:', e)
+                log.write('Error: %s'% e)
+        log.close()
         self.scan.selectAll()
 
     def parseScan2(self):
@@ -1418,9 +1430,9 @@ class initUi(QWidget): #setting up UI elements#
                               # 'PWD=KBMA4Test;')
                               'PWD=KBMA4Prod;')
         # sc = str(scan[10:]).lower()
-        # csc = sc.islower()
+        log = open("log.txt", "a+")
         try:
-            log = open("log.txt", "a+")
+
             if scan.startswith('M'):
                 # print('2')
                 if (len(self.res.text()) == 0 or len(self.lexpi.text()) == 0):
@@ -1451,12 +1463,11 @@ class initUi(QWidget): #setting up UI elements#
                     except pyodbc.Error as err:
 
                         log.write('Error! %s' % err)
-                        log.close()
+                        #log.close()
                     row = cursor2.fetchall()
                     # print(row)
                     if not row:
-                        QMessageBox.warning(self, 'Warning', 'The Order scanned is no longer valid.', QMessageBox.Ok,
-                                            QMessageBox.Ok)
+                        QMessageBox.warning(self, 'Warning', 'The Order scanned is no longer valid.', QMessageBox.Ok, QMessageBox.Ok)
                         self.scan2.clear()
                         self.srx2.clear()
                         self.scan2.setFocus()
@@ -1489,7 +1500,7 @@ class initUi(QWidget): #setting up UI elements#
                         # print(self.srx2.text())
                         cursor2.close()
                         log.write('\n' + "Verifying Order " + orderName + "\n")
-                        log.close()
+                        #log.close()
                     self.scan2.clear()
                     self.scan2.setFocus()
                     # mNum =''
@@ -1558,8 +1569,16 @@ class initUi(QWidget): #setting up UI elements#
                 bc_lot_exp = re.compile(bc_lot_exp)
 
                 bc_serial_lot_exp = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})21(?P<serial>[0-9,A-Z]{10,12})(17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20}))?$')
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})21(?P<serial>[0-9,A-Z]{10,14})(17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20}))?$')
                 bc_serial_lot_exp = re.compile(bc_serial_lot_exp)
+
+                bc_exp_lot_serial = (
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})21(?P<serial>[0-9,A-Z]{10,14})?$')
+                bc_exp_lot_serial = re.compile(bc_exp_lot_serial)
+
+                bc_lot_exp_serial = (
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})21(?P<serial>[0-9,A-Z]{10,14})?$')
+                bc_lot_exp_serial = re.compile(bc_lot_exp_serial)
 
                 bc_plain = (r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})?$')
                 bc_plain = re.compile(bc_plain)
@@ -1678,15 +1697,19 @@ class initUi(QWidget): #setting up UI elements#
                                     if not match:
                                         match = bc_serial_lot_exp.match(scan)
                                         if not match:
-                                            match = bc_exp_lot.match(scan)
+                                            match = bc_lot_exp_serial.match(scan)
                                             if not match:
-                                                match = bc_plain.match(scan)
+                                                match = bc_exp_lot_serial.match(scan)
                                                 if not match:
-                                                    match = bc_plain1.match(scan)
+                                                    match = bc_exp_lot.match(scan)
                                                     if not match:
-                                                        match = bc_lot.match(scan)
+                                                        match = bc_plain.match(scan)
                                                         if not match:
-                                                            match = bc_cd_exp_lot.match(scan)
+                                                            match = bc_plain1.match(scan)
+                                                            if not match:
+                                                                match = bc_lot.match(scan)
+                                                                if not match:
+                                                                    match = bc_cd_exp_lot.match(scan)
 
                         elif scan.startswith('00') and len(scan) > 10:
                             match = bc_10_1.match(scan)
@@ -1721,9 +1744,9 @@ class initUi(QWidget): #setting up UI elements#
                                 ndc1 = match.group('ndc')
                                 self.sndc1 = QLineEdit()
                                 if scan.startswith('3') and len(scan) > 10:
-                                    self.sndc1.setText('3' + ndc)
+                                    self.sndc1.setText('3' + ndc1)
                                 else:
-                                    self.sndc1.setText(ndc)
+                                    self.sndc1.setText(ndc1)
 
                             else:
                                 pass
@@ -1801,7 +1824,7 @@ class initUi(QWidget): #setting up UI elements#
                             except pyodbc.Error as err:
                                 # print(err)
                                 log.write('Error! %s' % err)
-                                log.close()
+                                #log.close()
                             rc6 = cn2.fetchall()
                             # print(rc6)
                             if not rc6:
@@ -1809,17 +1832,17 @@ class initUi(QWidget): #setting up UI elements#
                                                     'This Scancode is not associated to any Products in SRx.\nPlease use the Receiving Tab to send information to PI group.',
                                                     QMessageBox.Ok, QMessageBox.Ok)
                                 log.write('Scan not in SRx ' + ndc1 + ' \n')
-                                log.close()
+                                #log.close()
                                 self.srp2.setText("Last Scanned Barcode not in SRx")
 
                             else:
                                 self.srp2.setText(rc6[0][1] + " by " + rc6[0][3])
                                 log.write(rc6[0][1] + " by " + rc6[0][3] + '\n')
-                                log.close()
+                                #log.close()
                             cn2.close()
                     except Exception:
-                        log.write('Error:', traceback.format_exc())
-                        log.close()
+                        log.write('Error:'+ traceback.format_exc())
+                        #log.close()
 
 
             else:
@@ -1829,8 +1852,7 @@ class initUi(QWidget): #setting up UI elements#
 
         except Exception:
             log.write('Error:', traceback.format_exc())
-            log.close()
-
+        log.close()
         self.scan2.selectAll()
         self.scan2.setFocus()
 
