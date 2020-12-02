@@ -12,7 +12,7 @@ import smtplib
 from email.mime.text import MIMEText
 import pandas as pd
 import fileinput
-from ldap3 import Server, Connection, ALL
+from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES
 from pandas import *
 # import docx
 # from docx import exceptions
@@ -32,6 +32,7 @@ import re
 val = False
 run = True
 u=''
+user=''
 loc=''
 num=''
 scan = ''
@@ -60,12 +61,7 @@ class loginWindow(QDialog):
         llayout.addWidget(self.loginButton,3,4,1,1)
 
     def handleLogin(self):
-        global u
-        global val
-        global admin
-        global loc
-        global num
-        global email
+        global u, user, val, admin, loc, num, email
         u = self.loginUser.text()
         p = self.loginPass.text()
         locnum = pd.read_excel("WS.xlsx", sheet_name="Pharm WS Info")
@@ -103,14 +99,12 @@ class loginWindow(QDialog):
                 self.accept()
                 val = True
                 Base = 'dc=mskcc,dc=root,dc=mskcc,dc=org'
-                conn.search(search_base=Base, search_filter='(cn=' + u + ')', attributes="memberof")
+                conn.search(search_base=Base, search_filter='(cn=' + u + ')', attributes=[ALL_ATTRIBUTES])
+                cd = json.loads(conn.response_to_json())
+                user = cd['entries'][0]['attributes']['extensionAttribute15']
                 try:
-                    d = conn.response[0]['raw_attributes']['memberOf']
-                    # print(d)
-                    l = []
-                    for item in d:
-                        l.append(item.decode("utf-8"))
-                    if 'CN=GRP_PHA_Informatics,OU=ezGroups,OU=Resources,DC=MSKCC,DC=ROOT,DC=MSKCC,DC=ORG' in l:
+                    d = cd['entries'][0]['attributes']['memberOf']
+                    if 'CN=GRP_PHA_Informatics,OU=ezGroups,OU=Resources,DC=MSKCC,DC=ROOT,DC=MSKCC,DC=ORG' in d:
                         admin = 'Y'
                     else:
                         admin = 'N'
@@ -121,7 +115,7 @@ class loginWindow(QDialog):
                 conn.password = ''
                 p = ''
                 log = open("log.txt", "a+")
-                log.write("\nSession started at " + str(sdt) + " by user " + u + " from Workstation " + ws + ", located at " + loc + "; Phone: " + str(num) + ";email: " + email + "\n")
+                log.write("\nSession started at " + str(sdt) + " by user " + user + " from Workstation " + ws + ", located at " + loc + "; Phone: " + str(num) + ";email: " + email + "\n")
                 log.close()
 
         else:
@@ -150,15 +144,7 @@ class initUi(QWidget): #setting up UI elements#
         self.user = QLabel()
         self.loc = QLineEdit()
         self.phone = QLineEdit()
-        global log
-        global dt
-        global ws
-        global val
-        global run
-        global u
-        global admin
-        global loc
-        global num
+        global log, dt, ws, val, run, u, admin, loc, num
 
         self.loc.setText(loc)
         self.phone.setText(str(num))
@@ -804,7 +790,7 @@ class initUi(QWidget): #setting up UI elements#
         self.submitR.setEnabled(True)
 
     def submitReq(self):
-        global u, email
+        global u, user, email
         loc = self.loc.text()
         num = self.phone.text().strip()
         if len(self.sndc.text())==0 or len(self.drug.text())==0 or len(self.mfr.text())==0\
@@ -820,7 +806,7 @@ class initUi(QWidget): #setting up UI elements#
             receiver = ['zzpdl_pha_informatics@mskcc.org','zzPDL_PHA_Billing_Compliance@mskcc.org']
             #receiver = 'molinar1@mskcc.org'
             message = ("Subject: New KBMA Barcode Request\n"+
-                        "\nSubmitted by: "+u+"@mskcc.org"+
+                        "\nSubmitted by: "+ user+" ("+u+"@mskcc.org)"+
                         "\nLocation: "+loc+
                         "\nNumber: "+str(num)+
                         "\nRaw Scan:"+self.scan.text()+
@@ -842,7 +828,7 @@ class initUi(QWidget): #setting up UI elements#
                 #print("sent")
             except Exception as e:
                 log = open("log.txt", "a+")
-                log.write('Error! %s' % e)
+                log.write('Error Code 1: Submit not successful! Details: %s\n' % e)
                 log.close()
 
             s = [self.sndc.text(),
@@ -988,7 +974,7 @@ class initUi(QWidget): #setting up UI elements#
             c1.execute("SET NOCOUNT ON EXEC KBMAGetPI;")
         except pyodbc.Error as err:
             log = open("log.txt", "a+")
-            log.write('Error! %s' % err)
+            log.write('Error Code 2: Association Requests not found! Details: %s\n' % err)
             log.close()
 
         row = c1.fetchall()
@@ -1046,7 +1032,7 @@ class initUi(QWidget): #setting up UI elements#
                 c1.execute(qr, pi)
                 #c1.commit()
             except pyodbc.Error as err:
-                log.write('Error! %s' % err)
+                log.write('Error Code 3: Association Requests not performed! Details: %s\n' % err)
                 log.close()
             rp = c1.fetchall()
             #print(rp)
@@ -1061,7 +1047,7 @@ class initUi(QWidget): #setting up UI elements#
                     c1.execute("SET NOCOUNT ON EXEC KBMAGetPI;")
                 except pyodbc.Error as err:
                     log = open("log.txt", "a+")
-                    log.write('Error! %s' % err)
+                    log.write('Error Code 4: Association Requests refresh not successful! Details: %s\n' % err)
                     log.close()
                 row = c1.fetchall()
                 rf = len(row)
@@ -1199,9 +1185,12 @@ class initUi(QWidget): #setting up UI elements#
                 bc_repack_exp1 = (r'3(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})(?P<exp>[0-9]{4})?$')
                 bc_repack_exp1 = re.compile(bc_repack_exp1)
 
-                lot_exp_bc = (
-                    r'17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
+                lot_exp_bc = (r'17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
                 lot_exp_bc = re.compile(lot_exp_bc)
+
+                bc_otc = (r'003(?P<ndc>[0-9]{9,10})(?P<check_dig>[0-9]{1})?$')
+                bc_otc = re.compile(bc_otc)
+
                 if not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00')) and (scan.startswith('17') and len(scan) > 10):
                     if self.sndc.text() != '':
                         match = lot_exp_bc.match(scan)
@@ -1262,6 +1251,8 @@ class initUi(QWidget): #setting up UI elements#
 
                     elif scan.startswith('00') and len(scan) > 10:
                         match = bc_10_1.match(scan)
+                        if not match:
+                            match = bc_otc.match(scan)
 
                     elif scan.startswith('3') and len(scan) > 10:
                         match = bc_repack.match(scan)
@@ -1345,7 +1336,7 @@ class initUi(QWidget): #setting up UI elements#
                             cursor.execute(qb, pb)
                         except pyodbc.Error as err:
                             #log = open("log.txt", "a+")
-                            log.write('Error! %s' % err)
+                            log.write('Error Code 5: ParseScan VerifySRx failed! Details: %s\n' % err)
                             #log.close()
                         rc = cursor.fetchall()
                         # print(rc)
@@ -1358,7 +1349,7 @@ class initUi(QWidget): #setting up UI elements#
                             try:
                                 cursor.execute(qr, self.sndc.text())
                             except pyodbc.Error as err:
-                                log.write('Error! %s' % err)
+                                log.write('Error Code 6: ParseScan VerifyBarcode failed! Details: %s\n' % err)
                                 #log.close()
                             rb = cursor.fetchall()
                             # print(rb[0][0])
@@ -1407,7 +1398,7 @@ class initUi(QWidget): #setting up UI elements#
                 self.lot.setText(lot)
                 self.exp.setText(exp)
             except Exception as e:
-                log.write('Error: %s'% e)
+                log.write('Error Code 7: ParseScan failed! Details: %s\n'% e)
         log.close()
         self.scan.selectAll()
 
@@ -1461,8 +1452,7 @@ class initUi(QWidget): #setting up UI elements#
                         cursor2 = cnx2.cursor()
                         cursor2.execute(qd, mNum)
                     except pyodbc.Error as err:
-
-                        log.write('Error! %s' % err)
+                        log.write('Error Code 8: ParseScan2 OrderLookup failed! Details: %s\n' % err)
                         #log.close()
                     row = cursor2.fetchall()
                     # print(row)
@@ -1602,9 +1592,11 @@ class initUi(QWidget): #setting up UI elements#
                 bc_repack_exp1 = (r'3(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})(?P<exp>[0-9]{4})?$')
                 bc_repack_exp1 = re.compile(bc_repack_exp1)
 
-                lot_exp_bc = (
-                    r'17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
+                lot_exp_bc = (r'17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
                 lot_exp_bc = re.compile(lot_exp_bc)
+
+                bc_otc = (r'003(?P<ndc>[0-9]{9,10})(?P<check_dig>[0-9]{1})?$')
+                bc_otc = re.compile(bc_otc)
 
                 if (scan.startswith('17') and len(scan) > 10) and not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00')):
                     #print('nondrugscan')
@@ -1713,6 +1705,8 @@ class initUi(QWidget): #setting up UI elements#
 
                         elif scan.startswith('00') and len(scan) > 10:
                             match = bc_10_1.match(scan)
+                            if not match:
+                                match = bc_otc.match(scan)
 
                         elif scan.startswith('3') and len(scan) > 10:
                             match = bc_repack.match(scan)
@@ -1823,7 +1817,7 @@ class initUi(QWidget): #setting up UI elements#
                                 cn2.execute(qb, pb)
                             except pyodbc.Error as err:
                                 # print(err)
-                                log.write('Error! %s' % err)
+                                log.write('Error Code 9: ParseScan2 VerifySRx failed! Details: %s\n' % err)
                                 #log.close()
                             rc6 = cn2.fetchall()
                             # print(rc6)
@@ -1841,7 +1835,7 @@ class initUi(QWidget): #setting up UI elements#
                                 #log.close()
                             cn2.close()
                     except Exception:
-                        log.write('Error:'+ traceback.format_exc())
+                        log.write('Error Code 10: ParseScan2 parsing failed! Details: %s\n'+ traceback.format_exc())
                         #log.close()
 
 
@@ -1851,7 +1845,7 @@ class initUi(QWidget): #setting up UI elements#
                 self.scan2.setFocus()
 
         except Exception:
-            log.write('Error:', traceback.format_exc())
+            log.write('Error Code 11: ParseScan2 failed! Details: %s\n', traceback.format_exc())
         log.close()
         self.scan2.selectAll()
         self.scan2.setFocus()
@@ -1871,7 +1865,9 @@ class initUi(QWidget): #setting up UI elements#
             self.psScan.setFocus()
         else:
             scan = scan.replace('-','')
-            if len(scan) > 10 and scan.startswith('00'):
+            if len(scan) > 10 and scan.startswith('003'):
+                self.ndc3.setText(scan[3:13])
+            elif len(scan) > 10 and scan.startswith('00'):
                 self.ndc3.setText(scan[1:])
             elif scan.startswith('3'):
                 if len(scan) ==17:
@@ -1910,10 +1906,8 @@ class initUi(QWidget): #setting up UI elements#
                 mdt = mdt[mdt.find("setid=") + 6:mdt.find("\">")]
                 #print(cps, mdt)
                 if mdt == '':
-                    self.psResult.setText('Response from DailyMed: No Drug Package Labels found.')
-                    log = open("log.txt", "a+")
-                    log.write("Response from DailyMed: No Drug Package Labels found for PS80 Check." + "\n")
-                    log.close()
+                    restext = " Response from DailyMed: No Drug Package Labels found for PS80 Check."
+                    self.psResult.setText(restext)
                     #QMessageBox.warning(self, 'Warning',"No Drug Package Information found.",QMessageBox.Ok, QMessageBox.Ok)
                 else:
                     param1 = {"setid": mdt}
@@ -1928,18 +1922,22 @@ class initUi(QWidget): #setting up UI elements#
                         if not ps1:
                             ps2 = soup2.find_all(string='polysorbate 80')
                             if not ps2:
-                                self.psResult.setText('This product DOES NOT contain Polysorbate 80.')
+                                restext = ' This product DOES NOT contain Polysorbate 80.'
+                                self.psResult.setText(restext)
                                 self.psImage.setPixmap(psnf)
                                 self.psImage.setMaximumWidth(25)
                             else:
                                 QMessageBox.warning(self, 'Information','This product contains ' + str(ps2[0]).capitalize(),QMessageBox.Ok,QMessageBox.Ok)
+                                restext = ' This product DOES contain Polysorbate 80.'
                                 self.psImage.clear()
                         else:
                             QMessageBox.warning(self, 'Information','This product contains ' + str(ps1[0]).capitalize(),QMessageBox.Ok,QMessageBox.Ok)
+                            restext = ' This product DOES contain Polysorbate 80.'
                             self.psImage.clear()
 
                     else:
                         QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps[0]).capitalize(),QMessageBox.Ok,QMessageBox.Ok)
+                        restext = ' This product DOES contain Polysorbate 80.'
                         self.psImage.clear()
             else:
                 ps = soup2.find_all(string='POLYSORBATE 80')
@@ -1951,21 +1949,28 @@ class initUi(QWidget): #setting up UI elements#
                     if not ps1:
                         ps2 = soup2.find_all(string='polysorbate 80')
                         if not ps2:
-                            self.psResult.setText('This product DOES NOT contain Polysorbate 80.')
+                            restext = ' This product DOES NOT contain Polysorbate 80.'
+                            self.psResult.setText(restext)
                             self.psImage.setPixmap(psnf)
                             self.psImage.setMaximumWidth(25)
                         else:
                             QMessageBox.warning(self, 'Information','This product contains ' + str(ps2[0]).capitalize(),QMessageBox.Ok,QMessageBox.Ok)
+                            restext = ' This product DOES contain Polysorbate 80.'
                             self.psImage.clear()
 
                     else:
                         QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps1[0]).capitalize(),QMessageBox.Ok,QMessageBox.Ok)
+                        restext = ' This product DOES contain Polysorbate 80.'
                         self.psImage.clear()
 
                 else:
                     QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps[0]).capitalize(),QMessageBox.Ok,QMessageBox.Ok)
+                    restext = ' This product DOES contain Polysorbate 80.'
                     self.psImage.clear()
             #ndc = ''
+            log = open("log.txt", "a+")
+            log.write("\nResponse from DailyMed: " + self.ndc3.text() + restext)
+            log.close()
             self.ndc3.clear()
             self.psScan.clear()
             self.psScan.setFocus()
@@ -2029,7 +2034,7 @@ class initUi(QWidget): #setting up UI elements#
                     cd.commit()
             except pyodbc.Error as err:
                 log = open("log.txt", "a+")
-                log.write('Error! %s' % err)
+                log.write('Error Code 12: SubmitDisp failed! Details: %s\n' % err)
                 log.close()
             cd.close()
             log = open("log.txt","a+")
@@ -2105,8 +2110,7 @@ class initUi(QWidget): #setting up UI elements#
                     rcursor2 = rejcnx.cursor()
                     rcursor2.execute(qd, rmNum)
                 except pyodbc.Error as err:
-
-                    log.write('Error! %s' % err)
+                    log.write('Error Code 13: RejFind OrderLookup failed! Details: %s\n' % err)
                     log.close()
                 row = rcursor2.fetchall()
                 # print(row)
@@ -2153,7 +2157,7 @@ class initUi(QWidget): #setting up UI elements#
                 except pyodbc.Error as err:
                     QMessageBox.information(self, "Information", 'No results given by the Query', QMessageBox.Ok)
                     # print(err)
-                    log.write('Error! %s' % err)
+                    log.write('Error Code 14: RejFind VerifySRx failed! Details: %s\n' % err)
                     log.close()
                 rc6 = rcursor2.fetchall()
                 # print(rc6)
@@ -2276,7 +2280,7 @@ class initUi(QWidget): #setting up UI elements#
                     # print("sent")
                 except Exception as e:
                     log = open("log.txt", "a+")
-                    log.write('Error! %s' % e)
+                    log.write('Error Code 15: RejSubmit failed! Details: %s\n' % e)
                     log.close()
             self.rejScan.clear()
             self.rejResult.clear()
