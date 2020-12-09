@@ -61,7 +61,13 @@ class loginWindow(QDialog):
         llayout.addWidget(self.loginButton, 3, 4, 1, 1)
 
     def handleLogin(self):
-        global u, user, val, admin, loc, num, email
+        global u
+        global user
+        global val
+        global admin
+        global loc
+        global num
+        global email
         u = self.loginUser.text()
         p = self.loginPass.text()
         locnum = pd.read_excel("WS.xlsx", sheet_name="Pharm WS Info")
@@ -146,7 +152,15 @@ class initUi(QWidget):  # setting up UI elements#
         self.user = QLabel()
         self.loc = QLineEdit()
         self.phone = QLineEdit()
-        global log, dt, ws, val, run, u, admin, loc, num
+        global log
+        global dt
+        global ws
+        global val
+        global run
+        global u
+        global admin
+        global loc
+        global num
 
         self.loc.setText(loc)
         self.phone.setText(str(num))
@@ -792,7 +806,9 @@ class initUi(QWidget):  # setting up UI elements#
         self.submitR.setEnabled(True)
 
     def submitReq(self):
-        global u, user, email
+        global u
+        global user
+        global email
         loc = self.loc.text()
         num = self.phone.text().strip()
         if len(self.sndc.text()) == 0 or len(self.drug.text()) == 0 or len(self.mfr.text()) == 0 \
