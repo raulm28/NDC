@@ -72,9 +72,9 @@ class loginWindow(QDialog):
         p = self.loginPass.text()
         locnum = pd.read_excel("WS.xlsx", sheet_name="Pharm WS Info")
         if locnum.loc[locnum['WSID'] == ws, 'WSID'].empty:
-            QMessageBox.warning(self, 'Warning',
-                                'This is not a registered Pharmacy workstation.\nPlease submit the workstation information to the Pharmacy Informatics team.',
-                                QMessageBox.Ok, QMessageBox.Ok)
+            # QMessageBox.warning(self, 'Warning',
+            #                     'This is not a registered Pharmacy workstation.\nPlease submit the workstation information to the Pharmacy Informatics team.',
+            #                     QMessageBox.Ok, QMessageBox.Ok)
             loc = 'Unassigned WS'
             num = '999-999-9999'
             email = 'zzPDL_PHA_Informatics'
