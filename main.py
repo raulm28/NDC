@@ -6,7 +6,7 @@ from PyQt5.QtGui import *
 # from ctypes import wintypes
 import traceback
 from bs4 import BeautifulSoup as bs
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
 import smtplib
 from email.mime.text import MIMEText
 import pandas as pd
@@ -72,9 +72,9 @@ class loginWindow(QDialog):
         p = self.loginPass.text()
         locnum = pd.read_excel("WS.xlsx", sheet_name="Pharm WS Info")
         if locnum.loc[locnum['WSID'] == ws, 'WSID'].empty:
-            QMessageBox.warning(self, 'Warning',
-                                'This is not a registered Pharmacy workstation.\nPlease submit the workstation information to the Pharmacy Informatics team.',
-                                QMessageBox.Ok, QMessageBox.Ok)
+            # QMessageBox.warning(self, 'Warning',
+            #                     'This is not a registered Pharmacy workstation.\nPlease submit the workstation information to the Pharmacy Informatics team.',
+            #                     QMessageBox.Ok, QMessageBox.Ok)
             loc = 'Unassigned WS'
             num = '999-999-9999'
             email = 'zzPDL_PHA_Informatics@mskcc.org'
@@ -107,7 +107,10 @@ class loginWindow(QDialog):
                 Base = 'dc=mskcc,dc=root,dc=mskcc,dc=org'
                 conn.search(search_base=Base, search_filter='(cn=' + u + ')', attributes=[ALL_ATTRIBUTES])
                 cd = json.loads(conn.response_to_json())
-                user = cd['entries'][0]['attributes']['extensionAttribute15']
+                if cd['entries'][0]['attributes'] == 'extensionAttribute15':
+                    user = cd['entries'][0]['attributes']['extensionAttribute15']
+                else:
+                    user = cd['entries'][0]['attributes']['givenName'] + " " + cd['entries'][0]['attributes']['sn']
                 try:
                     d = cd['entries'][0]['attributes']['memberOf']
                     if 'CN=GRP_PHA_Informatics,OU=ezGroups,OU=Resources,DC=MSKCC,DC=ROOT,DC=MSKCC,DC=ORG' in d:
@@ -191,12 +194,12 @@ class initUi(QWidget):  # setting up UI elements#
         self.tab7.layout = QGridLayout(self)
 
         # Setting up Receiving Tab #
-        search_label = QLabel("Scan:")
+        self.search_label = QLabel("Scan Barcode Here:")
         self.scan = QLineEdit()
         self.doseN = QLineEdit()
         self.doseQ = QLineEdit()
         self.packQ = QLineEdit()
-        self.scan.returnPressed.connect(self.parseScan)
+        self.scan.returnPressed.connect(self.parseScan2)
         srx_result = QLabel("SRx Match:")
         self.image_res = QLabel()
         drug = QLabel("Drug:")
@@ -240,10 +243,10 @@ class initUi(QWidget):  # setting up UI elements#
         self.srxd = QLineEdit()
         self.srxm = QLineEdit
 
-        self.search1 = QPushButton("Get Info")
-        self.search1.setAutoDefault(True)
-        self.search1.clicked.connect(self.searchButton)  # this connects the clicking action to a function(method) below
-        self.search1.setEnabled(False)
+        self.reset = QPushButton("Reset")
+        self.reset.setAutoDefault(True)
+        self.reset.clicked.connect(self.resetScans)
+        self.reset.setEnabled(False)
 
         self.submitR = QPushButton("Submit")
         self.submitR.clicked.connect(self.submitReq)
@@ -251,12 +254,6 @@ class initUi(QWidget):  # setting up UI elements#
 
         self.exit = QPushButton("Exit")
         self.exit.clicked.connect(self.closeApp)
-
-        self.tab1.layout.addWidget(search_label)
-        self.tab1.layout.addWidget(self.scan)
-        self.tab1.layout.addWidget(self.image_res)
-        self.tab1.layout.addWidget(self.search1)
-        self.tab1.layout.addWidget(self.submitR)
 
         # setting up the grid view below #
         self.h1 = QGridLayout(self)
@@ -283,17 +280,15 @@ class initUi(QWidget):  # setting up UI elements#
         self.h1.addWidget(self.lot, 19, 1, 1, 1)
         self.h1.addWidget(expl, 19, 2, 1, 1)
         self.h1.addWidget(self.exp, 19, 3, 1, 1)
+        self.h1.addWidget(self.submitR,20,0,1,6)
         self.tab1.setLayout(self.h1)
 
         # Setting up Dispensing Tab #
-        self.scan2 = QLineEdit()
         self.lexpi = QLineEdit()
         self.lastScan = QLineEdit()
         self.scan3 = QLineEdit()
         self.res = QLineEdit()
         self.lexp2 = QLineEdit()
-        self.scan2.returnPressed.connect(self.parseScan2)
-        disp = QLabel("Verify Scan:")
         match2 = QLabel('CIS Order:')
         product2 = QLabel('Product Scanned:')
         self.srx2 = QLabel()
@@ -320,9 +315,6 @@ class initUi(QWidget):  # setting up UI elements#
         self.image_res2 = QLabel()
         self.f = QGridLayout()
         self.f.addLayout(self.tab2.layout, 0, 0, 1, 1)
-        self.f.addWidget(disp, 1, 0, 1, 1)
-        self.f.addWidget(self.scan2, 1, 1, 1, 1)
-        self.f.addWidget(self.image_res2, 1, 2, 1, 3)
         self.f.addWidget(match2, 2, 0, 1, 1)
         self.f.addWidget(self.srx2, 2, 1, 1, 5)
         self.f.addWidget(product2, 3, 0, 1, 1)
@@ -367,11 +359,10 @@ class initUi(QWidget):  # setting up UI elements#
         self.newLexp = QLineEdit()
         self.lexpt = QTableWidget()
         self.lexpt.setColumnCount(1)
-        # This sets up the list of current items#
+        # This sets up the list of current items to track #
         lines = []
         with open('lexp.txt', 'r') as reader:
             line = reader.readlines()
-
             for item in line:
                 item.replace('\n', '')
                 # print(item.rstrip())
@@ -385,10 +376,9 @@ class initUi(QWidget):  # setting up UI elements#
                 for column, data in enumerate(line):
                     # print(line)
                     self.lexpt.setItem(line[0], column, QTableWidgetItem(str(line[1])))
-        # This prevents edit from the table itself#
 
         self.lexpt.resizeColumnsToContents()
-        self.lexpt.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.lexpt.setEditTriggers(QAbstractItemView.NoEditTriggers) # This prevents edit from the table itself#
         self.addLexp = QPushButton('Add to List')
         self.remLexp = QPushButton('Remove from List')
         self.addLexp.clicked.connect(self.add2Lexp)
@@ -424,7 +414,6 @@ class initUi(QWidget):  # setting up UI elements#
         self.tab6.setLayout(h6)
 
         # Rejection Reporting Tab #
-
         self.rejLabel = QLabel("Scan Label:")
         self.rejScan = QLineEdit()
         self.rejScan.returnPressed.connect(self.rejFind)
@@ -475,9 +464,13 @@ class initUi(QWidget):  # setting up UI elements#
         self.tab7.setLayout(self.h7)
         self.rejScan.setFocus()
 
-        self.layout.addWidget(self.tabs, 0, 0, 1, 6)
-        self.layout.addWidget(self.user, 6, 0, 1, 1)
-        self.layout.addWidget(self.exit, 6, 5, 1, 1)
+        self.layout.addWidget(self.search_label, 0,0,2,1)
+        self.layout.addWidget(self.scan, 0, 1 ,2, 2)
+        self.layout.addWidget(self.image_res, 0,3,1,2)
+        self.layout.addWidget(self.reset, 0, 7, 1, 1)
+        self.layout.addWidget(self.tabs, 3, 0, 1, 8)
+        self.layout.addWidget(self.user, 6, 0, 1, 4)
+        self.layout.addWidget(self.exit, 6, 7, 1, 1)
         self.scan.setFocus()  # bring cursor to scan field upon start#
         self.show()
 
@@ -492,23 +485,23 @@ class initUi(QWidget):  # setting up UI elements#
     def addMoreItems(self):
         if len(self.ndc2.text()) == 0:
             QMessageBox.warning(self, "Warning", "You must scan at least one product before adding more.", QMessageBox.Ok, QMessageBox.Ok)
-            self.scan2.selectAll()
+            self.scan.selectAll()
         elif self.lastScan.text() == "F":
             QMessageBox.warning(self, "Warning", "You have an Incorrect Scan.\nPlease review before adding more items.", QMessageBox.Ok, QMessageBox.Ok)
         # below lines for capturing for Marie Ryan's list (Albumin, Blood Prods, IVIGs)#
-        elif self.f.count() == 16 and (len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0):
+        elif self.f.count() == 13 and (len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0):
             QMessageBox.warning(self, "Warning", "You must record all information before adding more products.", QMessageBox.Ok, QMessageBox.Ok)
-            self.scan2.selectAll()
+            self.scan.selectAll()
 
-        elif self.f.count() == 22 and len(self.f.itemAt(17).widget().text()) == 0:
+        elif self.f.count() == 19 and len(self.f.itemAt(16).widget().text()) == 0:
             QMessageBox.warning(self, "Warning", "You must scan at least one product before adding more.", QMessageBox.Ok, QMessageBox.Ok)
-            self.scan2.selectAll()
-        elif self.f.count() == 22 and (len(self.f.itemAt(17).widget().text()) != 0 and (len(self.f.itemAt(19).widget().text()) == 0 or len(self.f.itemAt(21).widget().text()) == 0)):
+            self.scan.selectAll()
+        elif self.f.count() > 19 and (len(self.f.itemAt(16).widget().text()) != 0 and (len(self.f.itemAt(18).widget().text()) == 0 or len(self.f.itemAt(20).widget().text()) == 0)):
             QMessageBox.warning(self, "Warning", "You must record all information before adding more products.", QMessageBox.Ok, QMessageBox.Ok)
-            self.scan2.selectAll()
+            self.scan.selectAll()
         elif self.ndcLine == 6:
             QMessageBox.warning(self, "Warning", "No more than 3 different Lots can be recorded.", QMessageBox.Ok, QMessageBox.Ok)
-            self.scan2.selectAll()
+            self.scan.selectAll()
         else:
             i = self.ndcCount
             line = self.ndcLine
@@ -532,278 +525,48 @@ class initUi(QWidget):  # setting up UI elements#
             # print(self.ndcCount, self.f.indexOf(self.ndc2), self.f.indexOf(self.ndcs[i+1]), self.f.count())
             self.ndcCount += 6
             self.ndcLine += 1
-        self.scan2.setFocus()
-        self.scan2.selectAll()
+        self.scan.setFocus()
+        self.scan.selectAll()
 
-    def searchButton(self):
-        global run
-        global log
-        global ndc
+    def resetScans(self):
+        self.scan.clear()
+        self.scan.setFocus()
+        self.drug.clear()
         self.srx.setText('')
+        self.mfr.clear()
+        self.route.clear()
+        self.bname.clear()
+        self.ndc.clear()
+        self.pack.clear()
+        self.str.clear()
+        self.dform.clear()
+        self.lot.clear()
+        self.exp.clear()
+        self.lexp.clear()
+        self.sndc1.clear()
+        self.scans1.clear()
+        self.ndc2.clear()
+        self.lot2.clear()
+        self.exp2.clear()
         self.image_res.clear()
-        sv = self.scans1.text()
-
-        if sv == '':
-            QMessageBox.warning(self, 'Warning', "Please Scan a Product First.", QMessageBox.Ok, QMessageBox.Ok)
-        else:
-
-            params = {"labeltype": "all", "query": sv}
-            r = requests.get("https://dailymed.nlm.nih.gov/dailymed/search.cfm", params=params)
-            o = urlparse(r.url).query
-            q = o.replace("setid=", '')
-            # print(q)
-            soup = bs(r.text, "html5lib")
-            # print(soup)
-            dt = soup.find("td", {"class": "formHeadingTitle"}, string="Packaging")
-
-            if dt is None:
-                mdt = str(soup.find("a", {"class": "drug-info-link"}))
-                mdt = mdt[mdt.find("setid=") + 6:mdt.find("\">")]
-                if mdt == '':
-                    log = open("log.txt", "a+")
-                    log.write("Response from DailyMed: No Drug Package Labels found." + "\n")
-                    log.close()
-                    QMessageBox.warning(self, 'Warning', "No Drug Package Information found.\nPlease enter the information manually.", QMessageBox.Ok, QMessageBox.Ok)
-
-                    self.drug.setText('')
-                    self.srx.setText('')
-                    self.mfr.clear()
-                    self.route.clear()
-                    self.bname.clear()
-                    self.ndc.clear()
-                    self.pack.clear()
-                    self.str.clear()
-                    self.dform.clear()
-                    # self.scan.clear()
-                    self.scan.setFocus()
-                else:
-                    param1 = {"setid": mdt}
-                    r1 = requests.get("https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm", params=param1)
-                    s1 = bs(r1.text, "html5lib")
-                    dr = s1.find("td", {"class": "formLabel"}, string="Route of Administration").findNext("td").contents[0]
-                    url = "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/%s/packaging.json" % mdt
-
-                    source = requests.get(url).text
-                    d = json.loads(source)
-                    # print(json.dumps(d, indent=3))
-
-                    title = d['data']['title']
-                    d1 = title.replace(title[title.find("[") + 1:title.find("]")], '')
-                    # finding drug name #
-                    dt = d1.replace("[]", '')
-                    dt = dt.replace(dt[dt.find("("):dt.find(")") + 2], '')
-                    # Finding Labeler #
-                    mfr = title[title.find("[") + 1:title.find("]")]
-                    self.mfr.setText(mfr)
-                    self.route.setText(dr.title())
-                    self.drug.clear()
-                    self.pack.clear()
-                    self.dform.clear()
-
-                    for item in d['data']['products']:
-                        # Setting up lists length #
-                        # print(json.dumps(item, indent=3))
-                        i = len(item['active_ingredients'])
-                        p = len(item['packaging'])
-                        b = item['product_name']
-                        f = dt.replace(b + " ", '')
-                        f = f.replace(f[f.find('('):f.find(')') + 1], '')
-                        f = str(f).lstrip()
-                        self.dform.setText(f.capitalize())
-
-                        # Setting up variables for loops #
-                        j = 0
-                        k = 0
-                        l = 0
-                        # for multiple ingredients #
-                        n = ''
-                        j = 0
-
-                        if 'parts' in item:
-                            parts = len(item['parts'])
-                            # brand = item['product_name']
-                            # drug = item['product_name_generic']
-                            for l in range(parts):
-                                for j in range(len(item['parts'][str(l + 1)]['packaging'])):
-                                    ndc = item['parts'][str(l + 1)]['packaging'][j]['ndc']
-                                    if ndc.replace('-', '') == sv:
-                                        if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
-                                            desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
-                                        else:
-                                            desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
-                                        brand = str(item['product_name']).replace('\n', ' ')
-                                        drug = item['product_name_generic']
-                                        if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
-                                            stg = ''
-                                        else:
-                                            stg = item['parts'][str(l + 1)]['active_ingredients'][0]['strength']
-                                            stg = stg.capitalize()
-                                        self.ndc.setText(ndc)
-                                        self.str.setText(str(stg))
-                                        self.pack.setText(desc)
-                                        self.drug.setText(drug)
-                                        self.bname.setText(brand)
-                                    else:
-                                        j = 0
-                                        for j in range(len(item['packaging'])):
-                                            ndc = item['packaging'][j]['ndc']
-                                            if ndc.replace('-', '') == sv:
-                                                brand = str(item['product_name']).replace('\n', ' ')
-                                                drug = item['product_name_generic']
-                                                if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
-                                                    desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
-                                                else:
-                                                    desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
-                                                if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
-                                                    pass
-                                                else:
-                                                    stg = item['parts'][str(l + 1)]['active_ingredients'][0]['strength']
-                                                self.ndc.setText(ndc)
-                                                self.str.setText(str(stg))
-                                                self.pack.setText(desc)
-                                                self.drug.setText(drug)
-                                                self.bname.setText(brand)
-
-                        else:
-
-                            for j in range(p):
-                                if not item['packaging'][j]['ndc']:
-                                    pass
-                                else:
-                                    ndc = item['packaging'][j]['ndc']
-                                    if ndc.replace('-', '') == sv:
-                                        if len(item['packaging'][j]['package_descriptions']) > 1:
-                                            desc = item['packaging'][j]['package_descriptions'][l] + '; ' + item['packaging'][j]['package_descriptions'][k + 1]
-                                        else:
-                                            desc = item['packaging'][j]['package_descriptions'][l]
-                                        # print(desc)
-                                        brand = str(item['product_name']).replace('\n', ' ')
-                                        drug = item['product_name_generic']
-                                        for k in range(len(item['active_ingredients'])):
-                                            if len(item['active_ingredients']) < 2:
-                                                n = item['active_ingredients'][k]['strength']
-                                            elif len(item['active_ingredients']) > 1:
-                                                n += item['active_ingredients'][k]['name'] + ' ' + item['active_ingredients'][k]['strength'] + ', '
-                                        stg = n.rstrip(', ').capitalize()
-                                        self.ndc.setText(ndc)
-                                        self.str.setText(str(stg))
-                                        self.pack.setText(desc)
-                                        self.drug.setText(drug)
-                                        self.bname.setText(brand)
-                                        log = open("log.txt", "a+")
-                                        log.write("Response from DailyMed:" + "\n" + str(dt) + '; ' + str(stg) + '; ' + ndc + '; ' + desc + '\n')
-                                        log.close()
-
-            else:
-                dr = soup.find("td", {"class": "formLabel"}, string="Route of Administration").findNext("td").contents[0]  # Finding Route of administration#
-                url = "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/%s/packaging.json" % q
-                source = requests.get(url).text
-                d = json.loads(source)
-                print(json.dumps(d, indent=3))
-
-                title = d['data']['title']
-                d1 = title.replace(title[title.find("[") + 1:title.find("]")], '')
-                # finding drug name #
-                dt = d1.replace("[]", '')
-                dt = dt.replace(dt[dt.find("("):dt.find(")") + 1], '')
-                # Finding Labeler #
-                mfr = title[title.find("[") + 1:title.find("]")]
-                self.mfr.setText(mfr)
-                self.route.setText(dr.title())
-                self.drug.clear()
-                self.pack.clear()
-                self.dform.clear()
-
-                for item in d['data']['products']:
-                    # Setting up lists length #
-                    # print(json.dumps(item, indent=3))
-                    i = len(item['active_ingredients'])
-                    p = len(item['packaging'])
-                    b = item['product_name']
-                    f = dt[len(b) + 1:]
-                    f = f.replace(f[f.find('('):f.find(')') + 2], '')
-                    f = str(f).lstrip()
-                    self.dform.setText(f.capitalize())
-
-                    # Setting up variables for loops #
-                    j = 0
-                    k = 0
-                    l = 0
-                    n = ''
-                    j = 0
-                    if 'parts' in item:
-                        parts = len(item['parts'])
-                        # brand = item['product_name']
-                        # drug = item['product_name_generic']
-                        for l in range(parts):
-                            for j in range(len(item['parts'][str(l + 1)]['packaging'])):
-                                ndc = item['parts'][str(l + 1)]['packaging'][j]['ndc']
-                                if ndc.replace('-', '') == sv:
-                                    if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
-                                        desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
-                                    else:
-                                        desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
-                                    brand = str(item['product_name']).replace('\n', ' ')
-                                    drug = item['product_name_generic']
-                                    if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
-                                        stg = ''
-                                    else:
-                                        stg = item['parts'][str(l + 1)]['active_ingredients'][0]['strength']
-                                        stg = stg.capitalize()
-                                    self.ndc.setText(ndc)
-                                    self.str.setText(str(stg))
-                                    self.pack.setText(desc)
-                                    self.drug.setText(drug)
-                                    self.bname.setText(brand)
-                                else:
-                                    j = 0
-                                    for j in range(len(item['packaging'])):
-                                        ndc = item['packaging'][j]['ndc']
-                                        if ndc.replace('-', '') == sv:
-                                            brand = str(item['product_name']).replace('\n', ' ')
-                                            drug = item['product_name_generic']
-                                            if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
-                                                desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
-                                            else:
-                                                desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
-                                            if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
-                                                pass
-                                            else:
-                                                stg = item['parts'][str(l + 1)]['active_ingredients'][0]['strength']
-                                            self.ndc.setText(ndc)
-                                            self.str.setText(str(stg))
-                                            self.pack.setText(desc)
-                                            self.drug.setText(drug)
-                                            self.bname.setText(brand)
-
-                    else:
-                        for j in range(p):
-                            if not item['packaging'][j]['ndc']:
-                                pass
-                            else:
-                                ndc = item['packaging'][j]['ndc']
-                                if ndc.replace('-', '') == sv:
-                                    if len(item['packaging'][j]['package_descriptions']) > 1:
-                                        desc = item['packaging'][j]['package_descriptions'][l] + '; ' + item['packaging'][j]['package_descriptions'][k + 1]
-                                    else:
-                                        desc = item['packaging'][j]['package_descriptions'][l]
-                                    brand = str(item['product_name']).replace('\n', ' ')
-                                    drug = item['product_name_generic']
-                                    for k in range(len(item['active_ingredients'])):
-                                        if len(item['active_ingredients']) < 2:
-                                            n = item['active_ingredients'][k]['strength']
-                                        elif len(item['active_ingredients']) > 1:
-                                            n += item['active_ingredients'][k]['name'] + ' ' + item['active_ingredients'][k]['strength'] + ', '
-                                    stg = n.rstrip(', ').capitalize()
-                                    self.ndc.setText(ndc)
-                                    self.str.setText(str(stg))
-                                    self.pack.setText(desc)
-                                    self.drug.setText(drug)
-                                    self.bname.setText(brand)
-                                    log = open("log.txt", "a+")
-                                    log.write("Response from DailyMed:" + "\n" + str(dt) + '; ' + str(stg) + '; ' + ndc + '; ' + desc + '\n')
-                                    log.close()
-        self.submitR.setEnabled(True)
+        self.scan3.clear()
+        self.reset.setEnabled(False)
+        mNum = ''
+        item = 13
+        while item in range(self.f.count()):
+            self.it = self.f.itemAt(item).widget()
+            self.f.removeWidget(self.it)
+            self.it.deleteLater()
+            self.ndcLine = 4
+            del self.it
+        self.res.clear()
+        self.scan.clear()
+        self.srx2.clear()
+        self.srp2.clear()
+        self.scan.setFocus()
+        self.lexpi.clear()
+        res = []
+        self.scan.setFocus()
 
     def submitReq(self):
         global u
@@ -815,7 +578,7 @@ class initUi(QWidget):  # setting up UI elements#
                 or len(self.bname.text()) == 0 or len(self.str.text()) == 0 \
                 or len(self.dform.text()) == 0 or len(self.pack.text()) == 0:
             QMessageBox.warning(self, "Warning", "All fields must have a value.", QMessageBox.Ok, QMessageBox.Ok)
-            self.scan2.selectAll()
+            self.scan.selectAll()
         else:
             log = open("log.txt", "a+")
             log.write('Submitted to Pharmacy Informatics on ' + str(datetime.datetime.now()) + ' by ' + self.user.text() + '\n')
@@ -860,7 +623,7 @@ class initUi(QWidget):  # setting up UI elements#
                  self.user.text(),
                  self.phone.text(),
                  email]
-            # self.user.text()+'@mskcc.org']
+
             cnx0 = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
                                   'Server=SCISTSQLPRI;'
                                   # 'Server=SCISPSQLPRI;'
@@ -943,14 +706,11 @@ class initUi(QWidget):  # setting up UI elements#
     def rem2Lexp(self):
         row = self.lexpt.currentRow()
         item = self.lexpt.item(row, 0).text()
-        # print(item)
         ln = 1
 
         for line in fileinput.input('lexp.txt', inplace=True):
             if item in line:
                 continue
-            # print(line, end='')
-
         # Updating the table view#
         lines = []
         with open('lexp.txt', 'r') as reader:
@@ -969,10 +729,9 @@ class initUi(QWidget):  # setting up UI elements#
                 for column, data in enumerate(line):
                     # print(line)
                     self.lexpt.setItem(line[0], column, QTableWidgetItem(str(line[1])))
-        # This prevents edit from the table itself#
 
         self.lexpt.resizeColumnsToContents()
-        self.lexpt.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.lexpt.setEditTriggers(QAbstractItemView.NoEditTriggers)# This prevents edit from the table itself#
         self.newLexp.setFocus()
         QMessageBox.information(self, 'Message', "Item Removed" + self.newLexp.text(), QMessageBox.Ok, QMessageBox.Ok)
 
@@ -996,8 +755,8 @@ class initUi(QWidget):  # setting up UI elements#
 
         row = c1.fetchall()
         rc1 = len(row)
-        # rc1 = c1.rowcount
-        # To show all outstanding requests#
+
+        # To show all outstanding requests #
         if rc1 == 0:
             # print("No Outstanding Requests.")
             QMessageBox.information(self, 'Message', "No Outstanding Requests.", QMessageBox.Ok, QMessageBox.Ok)
@@ -1097,335 +856,16 @@ class initUi(QWidget):  # setting up UI elements#
             c1.commit()
             c1.close()
 
-    def parseScan(self):
-        global log
-        global ws
-        # print(ws)
-        nm = QPixmap("NoMatch.png").scaledToHeight(25)
-        m = QPixmap("Match.png").scaledToHeight(25)
-        log = open('log.txt', 'a+')
-        if len(self.drug.text()) != 0 or len(self.mfr.text()) != 0 \
-                or len(self.bname.text()) != 0 or len(self.str.text()) != 0 \
-                or len(self.dform.text()) != 0 or len(self.pack.text()) != 0:
-            quest1 = QMessageBox.question(self, "Warning", "You're about to restart the Receiving process.\nAre you sure you want to proceed?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-            if quest1 == QMessageBox.Yes:
-
-                log.write('Receiving Information for this product was not submitted.\nThe Process was restarted.')
-                # log.close()
-                self.ndc.clear()
-                self.srx.clear()
-                self.mfr.clear()
-                self.drug.clear()
-                self.route.clear()
-                self.bname.clear()
-                self.scans1.clear()
-                self.sndc.clear()
-                self.pack.clear()
-                self.str.clear()
-                self.lot.clear()
-                self.exp.clear()
-                self.dform.clear()
-                self.image_res.clear()
-                self.submitR.setEnabled(False)
-                self.search1.setEnabled(False)
-            else:
-                self.scan.undo()
-            self.scan.setFocus()
-        else:
-            self.mfr.clear()
-            self.drug.clear()
-            self.route.clear()
-            self.bname.clear()
-            self.ndc.clear()
-            self.pack.clear()
-            self.str.clear()
-            self.dform.clear()
-            self.image_res.clear()
-            self.lot.clear()
-            self.exp.clear()
-            scan = self.scan.text()
-            scan = scan.replace('-', '')
-            try:
-                bc_10 = (r'(?P<ndc>[0-9]{10})?$')
-                bc_10 = re.compile(bc_10)
-
-                bc_10_1 = (r'0(?P<ndc>[0-9]{10})?$')
-                bc_10_1 = re.compile(bc_10_1)
-
-                bc_11 = (r'(?P<ndc>[0-9]{11})?$')
-                bc_11 = re.compile(bc_11)
-
-                bc_exp_lot = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
-                bc_exp_lot = re.compile(bc_exp_lot)
-
-                bc_cd_exp_lot = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
-                bc_cd_exp_lot = re.compile(bc_cd_exp_lot)
-
-                bc_lot_exp = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})?$')
-                bc_lot_exp = re.compile(bc_lot_exp)
-
-                bc_serial_lot_exp = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})21(?P<serial>[0-9,A-Z]{10,14})(17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20}))?$')
-                bc_serial_lot_exp = re.compile(bc_serial_lot_exp)
-
-                bc_exp_lot_serial = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})21(?P<serial>[0-9,A-Z]{10,14})?$')
-                bc_exp_lot_serial = re.compile(bc_exp_lot_serial)
-
-                bc_lot_exp_serial = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})21(?P<serial>[0-9,A-Z]{10,14})?$')
-                bc_lot_exp_serial = re.compile(bc_lot_exp_serial)
-
-                bc_plain = (r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})?$')
-                bc_plain = re.compile(bc_plain)
-
-                bc_plain1 = (r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})[0-9]*?$')
-                bc_plain1 = re.compile(bc_plain1)
-
-                bc_lot = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
-                bc_lot = re.compile(bc_lot)
-
-                bc_repack = (r'3(?P<ndc>[0-9]{10})?$')
-                bc_repack = re.compile(bc_repack)
-
-                bc_repack1 = (r'3(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})?$')
-                bc_repack1 = re.compile(bc_repack1)
-
-                bc_repack_exp = (r'3(?P<ndc>[0-9]{11})(?P<check_dig>[0-9]{1})(?P<exp>[0-9]{4})?$')
-                bc_repack_exp = re.compile(bc_repack_exp)
-
-                bc_repack_exp1 = (r'3(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})(?P<exp>[0-9]{4})?$')
-                bc_repack_exp1 = re.compile(bc_repack_exp1)
-
-                bc_otc = (r'003(?P<ndc>[0-9]{9,10})(?P<check_dig>[0-9]{1})?$')
-                bc_otc = re.compile(bc_otc)
-
-                lot_exp_bc = (
-                    r'17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
-                lot_exp_bc = re.compile(lot_exp_bc)
-                if not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00')) and (scan.startswith('17') and len(scan) > 10):
-                    if self.sndc.text() != '':
-                        match = lot_exp_bc.match(scan)
-                        if 'lot' in match.groupdict():
-                            lot = match.group('lot')
-                            # print('Lot:', match.group('lot'))
-                        else:
-                            lot = ''
-                        if 'exp' in match.groupdict():
-                            if len(match.group('exp')) == 6:
-                                if match.group('exp').endswith('00'):
-                                    exp = match.group('exp')[2:4] + "/" + match.group('exp')[0:2]
-                                    # print('Exp:', match.group('exp')[2:4] + "/" + match.group('exp')[0:2])
-                                else:
-                                    exp = match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group(
-                                        'exp')[0:2]
-                                    # print('Exp:',match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group('exp')[0:2])
-                            else:
-                                exp = match.group('exp')[0:2] + "/" + match.group('exp')[2:4]
-                                # print('Exp:', match.group('exp')[0:2] + "/" + match.group('exp')[2:4])
-                        else:
-                            exp = ''
-                    else:
-                        QMessageBox.warning(self, 'Warning', "You must first scan the NDC barcode.", QMessageBox.Ok, QMessageBox.Ok)
-                        lot = ''
-                        exp = ''
-
-                elif scan.startswith("M"):
-                    QMessageBox.warning(self, "Warning", "Please use the Dispensing Tab for scanning labels", QMessageBox.Ok, QMessageBox.Ok)
-                    self.scan.clear()
-                    self.scan.setFocus()
-                    lot = ''
-                    exp = ''
-
-                else:
-                    if scan.startswith('01') or scan.startswith('(01)') or (scan.startswith('00') and len(scan) < 11) or (scan.startswith('17') and len(scan) < 11):
-                        match = bc_10.match(scan)
-                        if not match:
-                            match = bc_11.match(scan)
-                            if not match:
-                                match = bc_lot_exp.match(scan)
-                                if not match:
-                                    match = bc_serial_lot_exp.match(scan)
-                                    if not match:
-                                        match = bc_lot_exp_serial.match(scan)
-                                        if not match:
-                                            match = bc_exp_lot_serial.match(scan)
-                                            if not match:
-                                                match = bc_exp_lot.match(scan)
-                                                if not match:
-                                                    match = bc_plain.match(scan)
-                                                    if not match:
-                                                        match = bc_plain1.match(scan)
-                                                        if not match:
-                                                            match = bc_lot.match(scan)
-                                                            if not match:
-                                                                match = bc_cd_exp_lot.match(scan)
-
-                    elif scan.startswith('00') and len(scan) > 10:
-                        match = bc_10_1.match(scan)
-                        if not match:
-                            match = bc_otc.match(scan)
-
-                    elif scan.startswith('3') and len(scan) > 10:
-                        match = bc_repack.match(scan)
-                        if not match:
-                            match = bc_repack1.match(scan)
-                            if not match:
-                                match = bc_repack_exp.match(scan)
-                                if not match:
-                                    match = bc_repack_exp1.match(scan)
-
-                    elif not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00') or (
-                            scan.startswith('17') and len(scan) < 11)):
-                        match = bc_10.match(scan)
-                        if not match:
-                            match = bc_11.match(scan)
-                            if not match:
-                                match = bc_10_1.match(scan)
-                                if not match:
-                                    match = lot_exp_bc.match(scan)
-                    if not match:
-                        QMessageBox.warning(self, 'Warning', 'This is an invalid barcode.\nPlease try scanning another barcode.', QMessageBox.Ok, QMessageBox.Ok)
-
-                        log.write("Scancode " + self.scan.text() + " is not a valid scan.\n")
-                        # log.close()
-                        self.scan.clear()
-                        self.srx.clear()
-                        self.scan.setFocus()
-                        ndc = ''
-                        lot = ''
-                        exp = ''
-                    else:
-                        if 'ndc' in match.groupdict():
-                            ndc = match.group('ndc')
-                            self.scans1.setText(ndc)
-                            if scan.startswith('3') and len(scan) > 10:
-                                self.sndc.setText('3' + ndc)
-                            else:
-                                self.sndc.setText(ndc)
-                            # print('NDC:', match.group('ndc'))
-                        else:
-                            pass
-                        if 'lot' in match.groupdict():
-                            lot = match.group('lot')
-                            # print('Lot:', match.group('lot'))
-                        else:
-                            lot = ''
-                        if 'exp' in match.groupdict():
-                            if len(match.group('exp')) == 6:
-                                if match.group('exp').endswith('00'):
-                                    exp = match.group('exp')[2:4] + "/" + match.group('exp')[0:2]
-                                    # print('Exp:', match.group('exp')[2:4] + "/" + match.group('exp')[0:2])
-                                else:
-                                    exp = match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group('exp')[0:2]
-                                    # print('Exp:',match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group('exp')[0:2])
-                            else:
-                                exp = match.group('exp')[0:2] + "/" + match.group('exp')[2:4]
-                                # print('Exp:', match.group('exp')[0:2] + "/" + match.group('exp')[2:4])
-                        else:
-                            exp = ''
-
-                        if 'serial' in match.groupdict():
-                            serial = match.group('serial')
-                            # print('Serial:', match.group('serial'))
-                        else:
-                            serial = ''
-
-                        cnx = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                                             'Server=SCISTSQLPRI;'
-                                             # 'Server=SCISPSQLPRI;'
-                                             'Database=Test;'
-                                             # 'Database=Prod;'
-                                             'uid=MSKKBMA;'
-                                             'pwd=KBMA4Test;')
-                                            # 'pwd=KBMA4Prod;')
-
-                        cursor = cnx.cursor()
-                        qb = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifySRx @barcode = ?, @LocationStr = ?;"
-                        pb = (self.sndc.text(), ws)
-                        # print(pb)
-                        try:
-                            cursor.execute(qb, pb)
-                        except pyodbc.Error as err:
-                            # log = open("log.txt", "a+")
-                            log.write('Error Code 5: ParseScan VerifySRx failed! Details: %s\n' % err)
-                            # log.close()
-                        rc = cursor.fetchall()
-                        # print(rc)
-                        # setting up results #
-                        # log = open("log.txt", "a+")
-                        # log.write("Verifying in SRx for "+ndc+"\n")
-
-                        if not rc:
-                            qr = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifyBarcode @Barcode = ?;"
-                            try:
-                                cursor.execute(qr, self.sndc.text())
-                            except pyodbc.Error as err:
-                                log.write('Error Code 6: ParseScan VerifyBarcode failed! Details: %s\n' % err)
-                                # log.close()
-                            rb = cursor.fetchall()
-                            # print(rb[0][0])
-                            if rb[0][0] == 0:
-                                log.write("Scancode " + scan + " for NDC " + ndc + " not in SRx; New Request needed.\n")
-                                # log.close()
-                                self.srx.setText("Not in SRx")
-                                os.system('afplay buzzer.wav')
-                                self.image_res.setPixmap(nm)
-                                self.image_res.setMaximumWidth(25)
-                                self.drug.setText('')
-                                self.mfr.clear()
-                                self.route.clear()
-                                self.bname.clear()
-                                self.ndc.clear()
-                                self.pack.clear()
-                                self.str.clear()
-                                self.dform.clear()
-                                self.search1.setEnabled(True)
-                                self.submitR.setEnabled(False)
-                            else:
-                                log.write("A Duplicate Barcode Request for Scancode " + scan + " (NDC " + ndc + ") exists.\n")
-                                # log.close()
-                                os.system('afplay /System/Library/Sounds/funk.aiff')
-                                QMessageBox.warning(self, 'Duplicate Request', "This Barcode has already been submitted.\nNo further action required.", QMessageBox.Ok, QMessageBox.Ok)
-                                self.scan.clear()
-                                self.sndc.clear()
-                                self.srx.clear()
-                                self.scan.setFocus()
-                                self.search1.setEnabled(False)
-                                self.submitR.setEnabled(False)
-                        else:
-                            # print(rc[0][1])
-                            log.write("Match Found for Scancode " + scan + " (NDC " + ndc + "): " + rc[0][1] + " by " + rc[0][3] + "\n")
-                            # log.close()
-                            self.srx.setText(rc[0][1] + " by " + rc[0][3])
-                            os.system('afplay bing.wav')
-                            self.image_res.setPixmap(m)
-                            self.image_res.setMaximumWidth(25)
-                            self.search1.setEnabled(False)
-                            self.submitR.setEnabled(False)
-
-                        # self.srx.clear()
-                        cursor.commit()
-                        cursor.close()
-                self.lot.setText(lot)
-                self.exp.setText(exp)
-            except Exception as e:
-                log.write('Error Code 7: ParseScan failed! Details: %s\n' % e)
-        log.close()
-        self.scan.selectAll()
-
     def parseScan2(self):
         global log
         global passScan
         global failScan
         global ws
-
-        self.image_res2.clear()
-        scan = self.scan2.text()
+        scan = self.scan.text()
+        ing = ''
+        pck = ""
+        mfr = ""
+        qb = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifySRx @barcode = ?, @LocationStr = ?;"
         nm = QPixmap("NoMatch.png").scaledToHeight(45)
         m = QPixmap("Match.png").scaledToHeight(45)
         cnx2 = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
@@ -1437,432 +877,593 @@ class initUi(QWidget):  # setting up UI elements#
                               'PWD=KBMA4Test;')
         # 'PWD=KBMA4Prod;')
         # sc = str(scan[10:]).lower()
-        log = open("log.txt", "a+")
-        try:
-
-            if scan.startswith('M'):
-                # print('2')
-                if (len(self.res.text()) == 0 or len(self.lexpi.text()) == 0):
-                    self.ndc2.clear()
-                    self.exp2.clear()
-                    self.lot2.clear()
-                    self.lastScan.clear()
-                    self.srp2.clear()
-                    # print(self.f.count())
-
-                    if len(scan) == 10:
-                        mNum = scan
-                        self.scan3.setText(mNum)
-                        # scan3 = mNum
-                        doseNum = None
-                        self.doseN.setText(doseNum)
-                    elif len(scan) > 10:
-                        mNum = scan[0:10]
-                        doseNum = scan[scan.find(' ') + 1:len(scan)]
-                        self.doseN.setText(doseNum)
-                        self.scan3.setText(mNum)
-                    res = []
-
-                    try:
-                        qd = "SET NOCOUNT ON exec MSKKBMA.KBMADisp @MMNum = ?;"
-                        cursor2 = cnx2.cursor()
-                        cursor2.execute(qd, mNum)
-                    except pyodbc.Error as err:
-                        log.write('Error Code 8: ParseScan2 OrderLookup failed! Details: %s\n' % err)
-                        # log.close()
-                    row = cursor2.fetchall()
-                    # print(row)
-                    if not row:
-                        QMessageBox.warning(self, 'Warning', 'The Order scanned is no longer valid.', QMessageBox.Ok, QMessageBox.Ok)
-                        self.scan2.clear()
-                        self.srx2.clear()
-                        self.scan2.setFocus()
-                    else:
-
-                        for item in row:
-                            # print(item[2])
-                            if item[1] is None:
-                                orderName = item[0]
-                                self.srx2.setText(item[0])
-                            else:
-                                orderName = item[0] + ' ' + item[1]
-                                self.srx2.setText(item[0] + ' ' + item[1])
-                            res.append(str(item[2]))
-                            self.res.setText(', '.join(res))
-
-                            with open('lexp.txt', 'r') as lexp:
-                                lexpl = lexp.readlines()
-                                for line in lexpl:
-                                    if item[0] == line.rstrip():
-                                        self.lexpi.setText("Y")
-                                        self.submitD.setHidden(False)
-                                        self.addItem.setHidden(False)
-                                        break
-                                    else:
-                                        self.lexpi.clear()
-                                        self.submitD.setHidden(True)
-                                        self.addItem.setHidden(True)
-                        # print(self.res.text())
-                        # print(self.srx2.text())
-                        cursor2.close()
-                        log.write('\n' + "Verifying Order " + orderName + "\n")
-                        # log.close()
-                    self.scan2.clear()
-                    self.scan2.setFocus()
-                    # mNum =''
-
-                elif len(self.lexpi.text()) != 0:
-                    question = QMessageBox.question(self, 'Message', "Are you sure you want to cancel this dispense action?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-                    if question == QMessageBox.Yes:
-                        log.write('Dispensing Information for this order was not submitted.\n')
-                        # log.close()
+        if self.scan.text() == "":
+            QMessageBox.warning(self, 'Warning', 'Please scan a Barcode to Start.', QMessageBox.Ok,QMessageBox.Ok)
+            self.scan.clear()
+            self.srx2.clear()
+            self.scan.setFocus()
+        else:
+            log = open("log.txt", "a+")
+            try:
+                if scan.startswith('M0'):
+                    # print('2')
+                    self.tabs.setCurrentIndex(1)
+                    self.reset.setEnabled(True)
+                    if (len(self.res.text()) == 0 or len(self.lexpi.text()) == 0):
                         self.ndc2.clear()
-                        self.lot2.clear()
                         self.exp2.clear()
-                        self.image_res2.clear()
-                        self.scan3.clear()
-                        mNum = ''
-                        item = 16
-                        while item in range(self.f.count()):
-                            # item += 1
-                            self.it = self.f.itemAt(item).widget()
-                            self.f.removeWidget(self.it)
-                            self.it.deleteLater()
-                            self.ndcLine = 4
-                            del self.it
-                            # item += 1
-
-                        # print(self.f.count())
-                        self.res.clear()
-                        self.scan2.clear()
-                        self.srx2.clear()
+                        self.lot2.clear()
+                        self.lastScan.clear()
                         self.srp2.clear()
-                        self.scan2.setFocus()
-                        self.lexpi.clear()
+                        self.ndc.clear()
+                        self.srx.clear()
+                        self.mfr.clear()
+                        self.drug.clear()
+                        self.route.clear()
+                        self.bname.clear()
+                        self.scans1.clear()
+                        self.sndc.clear()
+                        self.pack.clear()
+                        self.str.clear()
+                        self.lot.clear()
+                        self.exp.clear()
+                        self.dform.clear()
+                        self.image_res.clear()
+                        self.submitR.setEnabled(False)
+                        if len(scan) == 10:
+                            mNum = scan
+                            self.scan3.setText(mNum)
+                            doseNum = None
+                            self.doseN.setText(doseNum)
+                        elif len(scan) > 10:
+                            mNum = scan[0:10]
+                            doseNum = scan[scan.find(' ') + 1:len(scan)]
+                            self.doseN.setText(doseNum)
+                            self.scan3.setText(mNum)
                         res = []
-                        self.scan2.setFocus()
-                    else:
-                        self.scan2.undo()
-                        self.scan2.undo()
-                        self.srx2.clear()
-                        self.srp2.clear()
-                        self.scan2.setFocus()
-                    self.lastScan.clear()
 
-            # If no M-number has been scanned#
-            elif not scan.startswith('M'):
-                scan = scan.replace('-', '')
-
-                bc_10 = (r'(?P<ndc>[0-9]{10})?$')
-                bc_10 = re.compile(bc_10)
-
-                bc_10_1 = (r'0(?P<ndc>[0-9]{10})?$')
-                bc_10_1 = re.compile(bc_10_1)
-
-                bc_11 = (r'(?P<ndc>[0-9]{11})?$')
-                bc_11 = re.compile(bc_11)
-
-                bc_exp_lot = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
-                bc_exp_lot = re.compile(bc_exp_lot)
-
-                bc_cd_exp_lot = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
-                bc_cd_exp_lot = re.compile(bc_cd_exp_lot)
-
-                bc_lot_exp = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})?$')
-                bc_lot_exp = re.compile(bc_lot_exp)
-
-                bc_serial_lot_exp = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})21(?P<serial>[0-9,A-Z]{10,14})(17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20}))?$')
-                bc_serial_lot_exp = re.compile(bc_serial_lot_exp)
-
-                bc_exp_lot_serial = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})21(?P<serial>[0-9,A-Z]{10,14})?$')
-                bc_exp_lot_serial = re.compile(bc_exp_lot_serial)
-
-                bc_lot_exp_serial = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})21(?P<serial>[0-9,A-Z]{10,14})?$')
-                bc_lot_exp_serial = re.compile(bc_lot_exp_serial)
-
-                bc_plain = (r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})?$')
-                bc_plain = re.compile(bc_plain)
-
-                bc_plain1 = (r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})[0-9]*?$')
-                bc_plain1 = re.compile(bc_plain1)
-
-                bc_lot = (
-                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
-                bc_lot = re.compile(bc_lot)
-
-                bc_repack = (r'3(?P<ndc>[0-9]{10})?$')
-                bc_repack = re.compile(bc_repack)
-
-                bc_repack1 = (r'3(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})?$')
-                bc_repack1 = re.compile(bc_repack1)
-
-                bc_repack_exp = (r'3(?P<ndc>[0-9]{11})(?P<check_dig>[0-9]{1})(?P<exp>[0-9]{4})?$')
-                bc_repack_exp = re.compile(bc_repack_exp)
-
-                bc_repack_exp1 = (r'3(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})(?P<exp>[0-9]{4})?$')
-                bc_repack_exp1 = re.compile(bc_repack_exp1)
-
-                lot_exp_bc = (r'17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
-                lot_exp_bc = re.compile(lot_exp_bc)
-
-                bc_otc = (r'003(?P<ndc>[0-9]{9,10})(?P<check_dig>[0-9]{1})?$')
-                bc_otc = re.compile(bc_otc)
-
-                if (scan.startswith('17') and len(scan) > 10) and not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00')):
-                    # print('nondrugscan')
-                    if len(self.res.text()) == 0:
-                        # print('here')
-                        QMessageBox.question(self, 'Message', "You must scan the order label first.",
-                                             QMessageBox.Ok,
-                                             QMessageBox.Ok)
-                        self.scan2.setFocus()
-                        self.scan2.selectAll()
-                        lot = ''
-                        exp = ''
-
-
-                    elif (self.f.count() == 16 and len(self.ndc2.text()) == 0):
-                        QMessageBox.question(self, 'Message', "Scan NDC Barcode First", QMessageBox.Ok, QMessageBox.Ok)
-                        self.scan2.setFocus()
-                        self.scan2.selectAll()
-                        lot = ''
-                        exp = ''
-
-
-                    elif self.f.count() == 22 and (len(self.ndc2.text()) == 0 or len(self.f.itemAt(17).widget().text()) == 0):
-                        QMessageBox.question(self, 'Message', "Scan NDC Barcode First", QMessageBox.Ok, QMessageBox.Ok)
-                        self.scan2.setFocus()
-                        self.scan2.selectAll()
-                        lot = ''
-                        exp = ''
-
-
-                    elif self.f.count() > 22 and (len(self.ndc2.text()) == 0 or len(self.f.itemAt(17).widget().text()) == 0 or len(self.f.itemAt(23).widget().text()) == 0):
-                        QMessageBox.question(self, 'Message', "Scan NDC Barcode First", QMessageBox.Ok, QMessageBox.Ok)
-                        self.scan2.setFocus()
-                        self.scan2.selectAll()
-                        lot = ''
-                        exp = ''
-
-                    else:
-                        match = lot_exp_bc.match(scan)
-                        # print(match.groupdict())
-                        if 'lot' in match.groupdict():
-                            lot = match.group('lot')
-                            # print('Lot:', match.group('lot'))
-                        else:
-                            lot = ''
-                        if 'exp' in match.groupdict():
-                            if len(match.group('exp')) == 6:
-                                if match.group('exp').endswith('00'):
-                                    exp = match.group('exp')[2:4] + "/" + match.group('exp')[0:2]
-                                    # print('Exp:', match.group('exp')[2:4] + "/" + match.group('exp')[0:2])
-                                else:
-                                    exp = match.group('exp')[2:4] + "/" + match.group('exp')[
-                                                                          4:6] + "/" + match.group(
-                                        'exp')[0:2]
-                                    # print('Exp:',match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group('exp')[0:2])
-                            else:
-                                exp = match.group('exp')[0:2] + "/" + match.group('exp')[2:4]
-                                # print('Exp:', match.group('exp')[0:2] + "/" + match.group('exp')[2:4])
-                        else:
-                            exp = ''
-
-                        if self.f.count() == 16:
-                            self.exp2.setText(exp)
-                            self.lot2.setText(lot)
-                        elif self.f.count() == 22:
-                            ex = self.f.itemAt(21)
-                            lx = self.f.itemAt(19)
-                            exw = ex.widget()
-                            exw.setText(exp)
-                            lxw = lx.widget()
-                            lxw.setText(lot)
-                        elif self.f.count() > 22:
-                            ex = self.f.itemAt(27)
-                            lx = self.f.itemAt(25)
-                            exw = ex.widget()
-                            exw.setText(exp)
-                            lxw = lx.widget()
-                            lxw.setText(lot)
-
-
-                else:
-                    # print('drugscan')
-                    try:
-                        if scan.startswith('01') or scan.startswith('(01)') or (scan.startswith('00') and len(scan) < 11) or (scan.startswith('17') and len(scan) < 11):
-                            match = bc_10.match(scan)
-                            if not match:
-                                match = bc_11.match(scan)
-                                if not match:
-                                    match = bc_lot_exp.match(scan)
-                                    if not match:
-                                        match = bc_serial_lot_exp.match(scan)
-                                        if not match:
-                                            match = bc_lot_exp_serial.match(scan)
-                                            if not match:
-                                                match = bc_exp_lot_serial.match(scan)
-                                                if not match:
-                                                    match = bc_exp_lot.match(scan)
-                                                    if not match:
-                                                        match = bc_plain.match(scan)
-                                                        if not match:
-                                                            match = bc_plain1.match(scan)
-                                                            if not match:
-                                                                match = bc_lot.match(scan)
-                                                                if not match:
-                                                                    match = bc_cd_exp_lot.match(scan)
-
-                        elif scan.startswith('00') and len(scan) > 10:
-                            match = bc_10_1.match(scan)
-                            if not match:
-                                match = bc_otc.match(scan)
-
-                        elif scan.startswith('3') and len(scan) > 10:
-                            match = bc_repack.match(scan)
-                            if not match:
-                                match = bc_repack1.match(scan)
-                                if not match:
-                                    match = bc_repack_exp.match(scan)
-                                    if not match:
-                                        match = bc_repack_exp1.match(scan)
-
-                        elif not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00') or (scan.startswith('17') and len(scan) < 11)):
-                            match = bc_10.match(scan)
-                            if not match:
-                                match = bc_11.match(scan)
-                                if not match:
-                                    match = bc_10_1.match(scan)
-                                    if not match:
-                                        match = lot_exp_bc.match(scan)
-
-                        if not match:
-                            QMessageBox.warning(self, 'Warning', 'This is an invalid barcode.\nPlease try scanning another barcode.', QMessageBox.Ok, QMessageBox.Ok)
+                        try:
+                            qd = "SET NOCOUNT ON exec MSKKBMA.KBMADisp @MMNum = ?;"
+                            cursor2 = cnx2.cursor()
+                            cursor2.execute(qd, mNum)
+                        except pyodbc.Error as err:
+                            log.write('Error Code 5: ParseScan2 OrderLookup failed! Details: %s\n' % err)
+                            # log.close()
+                        row = cursor2.fetchall()
+                        # print(row)
+                        if not row:
+                            QMessageBox.warning(self, 'Warning', 'The Order scanned is no longer valid.', QMessageBox.Ok, QMessageBox.Ok)
+                            log.write('Error Code 6: ParseScan2 OrderLookup failed! Details: %s\n' % err)
                             self.scan.clear()
-                            self.srp2.setText('Last Scan was an Invalid Barcode')
+                            self.srx2.clear()
                             self.scan.setFocus()
+                        else:
+                            for item in row:
+                                if item[1] is None:
+                                    orderName = item[0]
+                                    self.srx2.setText(item[0])
+                                else:
+                                    orderName = item[0] + ' ' + item[1]
+                                    self.srx2.setText(item[0] + ' ' + item[1])
+                                res.append(str(item[2]))
+                                self.res.setText(', '.join(res))
+                                with open('lexp.txt', 'r') as lexp:
+                                    lexpl = lexp.readlines()
+                                    for line in lexpl:
+                                        if item[0] == line.rstrip():
+                                            self.lexpi.setText("Y")
+                                            self.submitD.setHidden(False)
+                                            self.addItem.setHidden(False)
+                                            break
+                                        else:
+                                            self.lexpi.clear()
+                                            self.submitD.setHidden(True)
+                                            self.addItem.setHidden(True)
+                            # print(self.res.text())
+                            # print(self.srx2.text())
+                            cursor2.close()
+                            # log.write('\n' + "Verifying Order " + orderName + "\n")
+                            # log.close()
+                        self.scan.clear()
+                        self.scan.setFocus()
+
+                    elif len(self.lexpi.text()) != 0:
+                        question = QMessageBox.question(self, 'Message', "Are you sure you want to cancel this dispense action?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                        if question == QMessageBox.Yes:
+                            log.write('Dispensing Information for an order was not submitted.\n')
+                            # log.close()
+                            self.ndc2.clear()
+                            self.lot2.clear()
+                            self.exp2.clear()
+                            self.image_res.clear()
+                            self.scan3.clear()
+                            self.reset.setEnabled(False)
+                            mNum = ''
+                            item = 13
+                            while item in range(self.f.count()):
+                                # item += 1
+                                self.it = self.f.itemAt(item).widget()
+                                self.f.removeWidget(self.it)
+                                self.it.deleteLater()
+                                self.ndcLine = 4
+                                del self.it
+                            self.res.clear()
+                            self.scan.clear()
+                            self.srx2.clear()
+                            self.srp2.clear()
+                            self.scan.setFocus()
+                            self.lexpi.clear()
+                            res = []
+                            self.scan.setFocus()
+                        else:
+                            self.scan.undo()
+                            self.scan.undo()
+                            self.srx2.clear()
+                            self.srp2.clear()
+                            self.scan.setFocus()
+                        self.lastScan.clear()
+
+                # If non-Order label barcode has been scanned #
+                elif not scan.startswith('M0'):
+                    scan = scan.replace('-', '')
+
+                    bc_10 = (r'(?P<ndc>[0-9]{10})?$')
+                    bc_10 = re.compile(bc_10)
+
+                    bc_10_1 = (r'0(?P<ndc>[0-9]{10})?$')
+                    bc_10_1 = re.compile(bc_10_1)
+
+                    bc_11 = (r'(?P<ndc>[0-9]{11})?$')
+                    bc_11 = re.compile(bc_11)
+
+                    bc_exp_lot = (
+                        r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
+                    bc_exp_lot = re.compile(bc_exp_lot)
+
+                    bc_cd_exp_lot = (
+                        r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
+                    bc_cd_exp_lot = re.compile(bc_cd_exp_lot)
+
+                    bc_lot_exp = (
+                        r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})?$')
+                    bc_lot_exp = re.compile(bc_lot_exp)
+
+                    bc_serial_lot_exp = (
+                        r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})21(?P<serial>[0-9,A-Z]{10,14})(17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20}))?$')
+                    bc_serial_lot_exp = re.compile(bc_serial_lot_exp)
+
+                    bc_exp_lot_serial = (
+                        r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})21(?P<serial>[0-9,A-Z]{10,14})?$')
+                    bc_exp_lot_serial = re.compile(bc_exp_lot_serial)
+
+                    bc_lot_exp_serial = (
+                        r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})21(?P<serial>[0-9,A-Z]{10,14})?$')
+                    bc_lot_exp_serial = re.compile(bc_lot_exp_serial)
+
+                    bc_plain = (r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})?$')
+                    bc_plain = re.compile(bc_plain)
+
+                    bc_plain1 = (r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})[0-9]*?$')
+                    bc_plain1 = re.compile(bc_plain1)
+
+                    bc_lot = (r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
+                    bc_lot = re.compile(bc_lot)
+
+                    bc_repack = (r'3(?P<ndc>[0-9]{10})?$')
+                    bc_repack = re.compile(bc_repack)
+
+                    bc_repack1 = (r'3(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})?$')
+                    bc_repack1 = re.compile(bc_repack1)
+
+                    bc_repack_exp = (r'3(?P<ndc>[0-9]{11})(?P<check_dig>[0-9]{1})(?P<exp>[0-9]{4})?$')
+                    bc_repack_exp = re.compile(bc_repack_exp)
+
+                    bc_repack_exp1 = (r'3(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})(?P<exp>[0-9]{4})?$')
+                    bc_repack_exp1 = re.compile(bc_repack_exp1)
+
+                    lot_exp_bc = (r'17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
+                    lot_exp_bc = re.compile(lot_exp_bc)
+
+                    bc_otc = (r'003(?P<ndc>[0-9]{9,10})(?P<check_dig>[0-9]{1})?$')
+                    bc_otc = re.compile(bc_otc)
+
+                    if (scan.startswith('17') and len(scan) > 10) and not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00')):
+                        # print('nondrugscan')
+                        if len(self.res.text()) == 0:
+                            # print('here')
+                            QMessageBox.question(self, 'Message', "You must scan the order label first.",QMessageBox.Ok,QMessageBox.Ok)
+                            self.scan.setFocus()
+                            self.scan.selectAll()
                             lot = ''
                             exp = ''
-                        else:
-                            if 'ndc' in match.groupdict():
-                                ndc1 = match.group('ndc')
-                                self.sndc1 = QLineEdit()
-                                if scan.startswith('3') and len(scan) > 10:
-                                    self.sndc1.setText('3' + ndc1)
-                                else:
-                                    self.sndc1.setText(ndc1)
 
-                            else:
-                                pass
-                            # print('NDC:', ndc)
+                        elif (self.f.count() == 13 and len(self.ndc2.text()) == 0):
+                            QMessageBox.question(self, 'Message', "Scan NDC Barcode First", QMessageBox.Ok, QMessageBox.Ok)
+                            self.scan.setFocus()
+                            self.scan.selectAll()
+                            lot = ''
+                            exp = ''
+
+                        elif self.f.count() == 19 and (len(self.ndc2.text()) == 0 or len(self.f.itemAt(14).widget().text()) == 0):
+                            QMessageBox.question(self, 'Message', "Scan NDC Barcode First", QMessageBox.Ok, QMessageBox.Ok)
+                            self.scan.setFocus()
+                            self.scan.selectAll()
+                            lot = ''
+                            exp = ''
+
+                        elif self.f.count() > 19 and (len(self.ndc2.text()) == 0 or len(self.f.itemAt(14).widget().text()) == 0 or len(self.f.itemAt(20).widget().text()) == 0):
+                            QMessageBox.question(self, 'Message', "Scan NDC Barcode First", QMessageBox.Ok, QMessageBox.Ok)
+                            self.scan.setFocus()
+                            self.scan.selectAll()
+                            lot = ''
+                            exp = ''
+
+                        else:
+                            match = lot_exp_bc.match(scan)
+                            # print(match.groupdict())
                             if 'lot' in match.groupdict():
                                 lot = match.group('lot')
-
+                                # print('Lot:', match.group('lot'))
                             else:
                                 lot = ''
-                            # print('Lot:', lot)
                             if 'exp' in match.groupdict():
                                 if len(match.group('exp')) == 6:
                                     if match.group('exp').endswith('00'):
                                         exp = match.group('exp')[2:4] + "/" + match.group('exp')[0:2]
                                         # print('Exp:', match.group('exp')[2:4] + "/" + match.group('exp')[0:2])
                                     else:
-                                        exp = match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group(
-                                            'exp')[0:2]
+                                        exp = match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group('exp')[0:2]
                                         # print('Exp:',match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group('exp')[0:2])
                                 else:
                                     exp = match.group('exp')[0:2] + "/" + match.group('exp')[2:4]
                                     # print('Exp:', match.group('exp')[0:2] + "/" + match.group('exp')[2:4])
                             else:
                                 exp = ''
-                            # print('Exp:', exp)
-                            if 'serial' in match.groupdict():
-                                serial = match.group('serial')
-                                # print('Serial:', match.group('serial'))
-                            else:
-                                serial = ''
-                            # print('Serial:', serial)
-                            # log = open('log.txt', 'a+')
-                            if ndc1 in self.res.text():
-                                # print('found')
-                                log.write('Correct Scan ' + scan + "\n")
-                                os.system('afplay bing.wav')
-                                self.image_res2.setPixmap(m)
-                                self.image_res2.setMaximumWidth(45)
-                                self.lastScan.setText("P")
-                                if self.f.count() == 16:
-                                    self.ndc2.setText(ndc1)
-                                    self.lot2.setText(lot)
-                                    self.exp2.setText(exp)
-                                elif self.f.count() == 22:
-                                    n = self.f.itemAt(17).widget()
-                                    n1 = self.f.itemAt(19).widget()
-                                    n2 = self.f.itemAt(21).widget()
-                                    n.setText(ndc1)
-                                    n1.setText(lot)
-                                    n2.setText(exp)
-                                elif self.f.count() > 22:
-                                    n3 = self.f.itemAt(23).widget()
-                                    n4 = self.f.itemAt(25).widget()
-                                    n5 = self.f.itemAt(27).widget()
-                                    n3.setText(ndc1)
-                                    n4.setText(lot)
-                                    n5.setText(exp)
-                            else:
-                                os.system('afplay buzzer.wav')
-                                self.image_res2.setPixmap(nm)
-                                self.image_res2.setMaximumWidth(45)
-                                self.lastScan.setText("F")
-                                log.write('Incorrect Scan ' + ndc1 + '\n')
 
-                            dl = (datetime.datetime.now(), self.scan3.text(), self.doseN.text(), str(ndc1), lot, exp, self.user.text(), self.lastScan.text())
-                            # print(dl)
-                            try:
-                                q2 = "exec KBMADispR @createdwhen = ?, @MMNum = ?, @dose = ?, @NDC = ?, @Lot = ?, @Exp = ?, @User = ?, @ScanStatus = ?;"
-                                cn2 = cnx2.cursor()
-                                cn2.execute(q2, dl)
-                                cn2.commit()
-                                qb = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifySRx @barcode = ?, @LocationStr = ?;"
-                                pb = (self.sndc1.text(), ws)
-                                cn2.execute(qb, pb)
-                            except pyodbc.Error as err:
-                                # print(err)
-                                log.write('Error Code 9: ParseScan2 VerifySRx failed! Details: %s\n' % err)
-                                # log.close()
-                            rc6 = cn2.fetchall()
-                            # print(rc6)
-                            if not rc6:
-                                QMessageBox.warning(self, 'Warning',
-                                                    'This Scancode is not associated to any Products in SRx.\nPlease use the Receiving Tab to send information to PI group.',
-                                                    QMessageBox.Ok, QMessageBox.Ok)
-                                log.write('Scan not in SRx ' + ndc1 + ' \n')
-                                # log.close()
-                                self.srp2.setText("Last Scanned Barcode not in SRx")
+                            if self.f.count() == 13:
+                                self.exp2.setText(exp)
+                                self.lot2.setText(lot)
+                            elif self.f.count() == 19:
+                                ex = self.f.itemAt(18)
+                                lx = self.f.itemAt(16)
+                                exw = ex.widget()
+                                exw.setText(exp)
+                                lxw = lx.widget()
+                                lxw.setText(lot)
+                            elif self.f.count() > 19:
+                                ex = self.f.itemAt(24)
+                                lx = self.f.itemAt(22)
+                                exw = ex.widget()
+                                exw.setText(exp)
+                                lxw = lx.widget()
+                                lxw.setText(lot)
+                    else:
+                        # print('drugscan')
+                        try:
+                            if scan.startswith('01') or scan.startswith('(01)') or (scan.startswith('00') and len(scan) < 11) or (scan.startswith('17') and len(scan) < 11):
+                                match = bc_10.match(scan)
+                                if not match:
+                                    match = bc_11.match(scan)
+                                    if not match:
+                                        match = bc_lot_exp.match(scan)
+                                        if not match:
+                                            match = bc_serial_lot_exp.match(scan)
+                                            if not match:
+                                                match = bc_lot_exp_serial.match(scan)
+                                                if not match:
+                                                    match = bc_exp_lot_serial.match(scan)
+                                                    if not match:
+                                                        match = bc_exp_lot.match(scan)
+                                                        if not match:
+                                                            match = bc_plain.match(scan)
+                                                            if not match:
+                                                                match = bc_plain1.match(scan)
+                                                                if not match:
+                                                                    match = bc_lot.match(scan)
+                                                                    if not match:
+                                                                        match = bc_cd_exp_lot.match(scan)
 
+                            elif scan.startswith('00') and len(scan) > 10:
+                                match = bc_10_1.match(scan)
+                                if not match:
+                                    match = bc_otc.match(scan)
+
+                            elif scan.startswith('3') and len(scan) > 10:
+                                match = bc_repack.match(scan)
+                                if not match:
+                                    match = bc_repack1.match(scan)
+                                    if not match:
+                                        match = bc_repack_exp.match(scan)
+                                        if not match:
+                                            match = bc_repack_exp1.match(scan)
+
+                            elif not (scan.startswith('01') or scan.startswith('(01)') or scan.startswith('00') or (scan.startswith('17') and len(scan) < 11)):
+                                match = bc_10.match(scan)
+                                if not match:
+                                    match = bc_11.match(scan)
+                                    if not match:
+                                        match = bc_10_1.match(scan)
+                                        if not match:
+                                            match = lot_exp_bc.match(scan)
+
+                            if not match:
+                                QMessageBox.warning(self, 'Warning', 'This is an invalid barcode.\nPlease try scanning another barcode.', QMessageBox.Ok, QMessageBox.Ok)
+                                self.scan.clear()
+                                self.srp2.setText('Last Scan was an Invalid Barcode')
+                                self.scan.setFocus()
+                                lot = ''
+                                exp = ''
                             else:
-                                self.srp2.setText(rc6[0][1] + " by " + rc6[0][3])
-                                log.write(rc6[0][1] + " by " + rc6[0][3] + '\n')
-                                # log.close()
-                            cn2.close()
-                    except Exception:
-                        log.write('Error Code 10: ParseScan2 parsing failed! Details: %s\n' + traceback.format_exc())
-                        # log.close()
-            else:
-                QMessageBox.warning(self, 'Warning', 'This is not a valid scan.', QMessageBox.Ok, QMessageBox.Ok)
-                self.scan2.selectAll()
-                self.scan2.setFocus()
+                                if 'ndc' in match.groupdict():
+                                    ndc1 = match.group('ndc')
+                                    self.sndc1 = QLineEdit()
+                                    if scan.startswith('3') and len(scan) > 10:
+                                        self.sndc1.setText('3' + ndc1)
+                                    else:
+                                        self.sndc1.setText(ndc1)
 
-        except Exception:
-            log.write('Error Code 11: ParseScan2 failed! Details: %s\n' + traceback.format_exc())
+                                else:
+                                    pass
+                                # print('NDC:', ndc)
+                                if 'lot' in match.groupdict():
+                                    lot = match.group('lot')
+
+                                else:
+                                    lot = ''
+                                # print('Lot:', lot)
+                                if 'exp' in match.groupdict():
+                                    if len(match.group('exp')) == 6:
+                                        if match.group('exp').endswith('00'):
+                                            exp = match.group('exp')[2:4] + "/" + match.group('exp')[0:2]
+                                            # print('Exp:', match.group('exp')[2:4] + "/" + match.group('exp')[0:2])
+                                        else:
+                                            exp = match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group(
+                                                'exp')[0:2]
+                                            # print('Exp:',match.group('exp')[2:4] + "/" + match.group('exp')[4:6] + "/" + match.group('exp')[0:2])
+                                    else:
+                                        exp = match.group('exp')[0:2] + "/" + match.group('exp')[2:4]
+                                        # print('Exp:', match.group('exp')[0:2] + "/" + match.group('exp')[2:4])
+                                else:
+                                    exp = ''
+                                # print('Exp:', exp)
+                                if 'serial' in match.groupdict():
+                                    serial = match.group('serial')
+                                    # print('Serial:', match.group('serial'))
+                                else:
+                                    serial = ''
+                                # Decision Point: is this scan to verify dispensing or receiving? #
+                                if len(self.scan3.text()) != 0: # if the context is dispensing #
+                                    if ndc1 in self.res.text():
+                                        # print('found')
+                                        log.write('Correct Scan ' + scan + "\n")
+                                        os.system('afplay bing.wav')
+                                        pb = (self.sndc1.text(), ws)
+                                        cursor3 = cnx2.cursor()
+                                        # print(pb)
+                                        try:
+                                            cursor3.execute(qb, pb)
+                                        except pyodbc.Error as err:
+                                            # log = open("log.txt", "a+")
+                                            log.write('Error Code 7: ParseScan VerifySRx failed! Details: %s\n' % err)
+                                            # log.close()
+                                        rc = cursor3.fetchall()
+                                        print(rc)
+                                        self.srp2.setText(rc[0][1] + " by " + rc[0][3])
+                                        log.write(rc[0][1] + " by " + rc[0][3] + '\n')
+                                        log.close()
+                                        self.image_res.setPixmap(m)
+                                        self.image_res.setMaximumWidth(50)
+                                        self.lastScan.setText("P")
+                                        if self.f.count() == 13:
+                                            self.ndc2.setText(ndc1)
+                                            self.lot2.setText(lot)
+                                            self.exp2.setText(exp)
+                                        elif self.f.count() == 19:
+                                            n = self.f.itemAt(14).widget()
+                                            n1 = self.f.itemAt(16).widget()
+                                            n2 = self.f.itemAt(18).widget()
+                                            n.setText(ndc1)
+                                            n1.setText(lot)
+                                            n2.setText(exp)
+                                        elif self.f.count() > 19:
+                                            n3 = self.f.itemAt(20).widget()
+                                            n4 = self.f.itemAt(22).widget()
+                                            n5 = self.f.itemAt(24).widget()
+                                            n3.setText(ndc1)
+                                            n4.setText(lot)
+                                            n5.setText(exp)
+                                    else:
+                                        os.system('afplay buzzer.wav')
+                                        self.srp2.clear()
+                                        self.image_res.setPixmap(nm)
+                                        self.image_res.setMaximumWidth(50)
+                                        self.lastScan.setText("F")
+                                        log.write('Incorrect Scan ' + ndc1 + '\n')
+                                    dl = (datetime.datetime.now(), self.scan3.text(), self.doseN.text(), str(ndc1), lot, exp,self.user.text(), self.lastScan.text())
+                                    # print(dl)
+                                    try:
+                                        q2 = "exec KBMADispR @createdwhen = ?, @MMNum = ?, @dose = ?, @NDC = ?, @Lot = ?, @Exp = ?, @User = ?, @ScanStatus = ?;"
+                                        cn2 = cnx2.cursor()
+                                        cn2.execute(q2, dl)
+                                        cn2.commit()
+                                    except pyodbc.Error as err:
+                                        log.write('Error Code 11: KBMADispR failed! Details: %s\n' % err)
+                                    cn2.close()
+                                    if self.addItem.isHidden() and self.lastScan.text() == "P":
+                                        self.scan3.clear()
+                                    else:
+                                        pass
+
+                                else: # if the context is receiving #
+                                    self.tabs.setCurrentIndex(0)
+                                    if len(self.drug.text()) != 0 or len(self.mfr.text()) != 0 \
+                                        or len(self.bname.text()) != 0 or len(self.str.text()) != 0 \
+                                        or len(self.dform.text()) != 0 or len(self.pack.text()) != 0:
+                                        quest1 = QMessageBox.question(self, "Warning","You're about to restart the Receiving process.\nAre you sure you want to proceed?",
+                                                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                                        if quest1 == QMessageBox.Yes:
+                                            log.write('Receiving Information for this product was not submitted.\nThe Process was restarted.')
+                                            self.ndc.clear()
+                                            self.srx.clear()
+                                            self.mfr.clear()
+                                            self.drug.clear()
+                                            self.route.clear()
+                                            self.bname.clear()
+                                            self.scans1.clear()
+                                            self.sndc.clear()
+                                            self.pack.clear()
+                                            self.str.clear()
+                                            self.lot.clear()
+                                            self.exp.clear()
+                                            self.dform.clear()
+                                            self.image_res.clear()
+                                            self.submitR.setEnabled(False)
+                                        else:
+                                            self.scan.undo()
+                                        self.scan.setFocus()
+                                    else:
+                                        self.mfr.clear()
+                                        self.drug.clear()
+                                        self.route.clear()
+                                        self.bname.clear()
+                                        self.ndc.clear()
+                                        self.pack.clear()
+                                        self.str.clear()
+                                        self.dform.clear()
+                                        self.image_res.clear()
+                                        self.lot.clear()
+                                        self.exp.clear()
+                                        scan = self.scan.text()
+                                        scan = scan.replace('-', '')
+                                        pb = (self.sndc1.text(), ws)
+                                        cursor3 = cnx2.cursor()
+                                        # print(pb)
+                                        try: # Checking SRx Product Scan Table #
+                                            cursor3.execute(qb, pb)
+                                        except pyodbc.Error as err:
+                                            log.write('Error Code 8: ParseScan VerifySRx failed! Details: %s\n' % err)
+                                        rc = cursor3.fetchall()
+                                        # print(rc)
+                                        if rc: # Scan is in Product Scan Table #
+                                            log.write("Match Found for Scancode " + scan + " (NDC " + ndc1 + "): " + rc[0][1] + " by " + rc[0][3] + "\n")
+                                            self.srx.setText(rc[0][1] + " by " + rc[0][3])
+                                            os.system('afplay bing.wav')
+                                            self.image_res.setPixmap(m)
+                                            self.image_res.setMaximumWidth(50)
+                                            self.submitR.setEnabled(False)
+                                        else: # Scan is NOT in Product Scan Table #
+                                            qr = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifyBarcode @Barcode = ?;"
+                                            try: # Checking Barcode Info Collect Table #
+                                                cursor3.execute(qr, self.sndc1.text())
+                                            except pyodbc.Error as err:
+                                                log.write('Error Code 9: ParseScan VerifyBarcode failed! Details: %s\n' % err)
+                                                # log.close()
+                                            rb = cursor3.fetchall()
+                                            # print(rb[0][0])
+                                            if rb[0][0] == 0: # Scan is NOT in Barcode Info Collect Table #
+                                                log.write("Scancode " + scan + " for NDC " + ndc1 + " not in SRx; New Request needed.\n")
+                                                # log.close()
+                                                self.srx.setText("Not in SRx")
+                                                os.system('afplay buzzer.wav')
+                                                self.lastScan.setText("M")
+                                                try: # API Calls to DailyMed, OpenFDA, NIH #
+                                                    params = {"labeltype": "all", "query": ndc1}
+                                                    r = requests.get("https://dailymed.nlm.nih.gov/dailymed/search.cfm",params=params)
+                                                    o = urlparse(r.url).query
+                                                    # print(o)
+                                                    soup = bs(r.text, "html5lib")
+                                                    if o.startswith('setid='):
+                                                        q = o.replace("setid=", '')
+                                                    else:
+                                                        mdt = str(soup.find("a", {"class": "drug-info-link"}))
+                                                        mdt = mdt[mdt.find("setid=") + 6:mdt.find("\">")]
+                                                        # print(mdt)
+                                                        if mdt == '':
+                                                            log.write(
+                                                                'Error Code 10: No Drug Package Information found in OpenFDA.\n')
+                                                            QMessageBox.warning(self, 'Warning',"No Information found in OpenFDA.\nPlease Enter Information Manually.",
+                                                                                QMessageBox.Ok, QMessageBox.Ok)
+                                                            q = ""
+                                                            self.image_res.setPixmap(nm)
+                                                            self.image_res.setMaximumWidth(50)
+                                                        else:
+                                                            q = mdt.replace("setid=", '')
+
+                                                    if q != "":
+                                                        params = {'spl_id': '"%s"' % q}
+                                                        p = urlencode(params)
+                                                        r = requests.get('https://api.fda.gov/drug/ndc.json?search=%s' % p).text
+                                                        # print(r)
+                                                        res = json.loads(r)
+                                                        results = res['results'][0]
+                                                        print(json.dumps(results, indent=3))
+                                                        self.drug.setText(results['generic_name'])
+                                                        self.bname.setText(results['brand_name'])
+                                                        param = {'id': q}
+                                                        r2 = requests.get('https://rxnav.nlm.nih.gov/REST/ndcproperties.json',params=param).text
+                                                        d2 = json.loads(r2)
+                                                        print(json.dumps(d2, indent=3))
+                                                        prop = d2['ndcPropertyList']['ndcProperty']
+                                                        for i in range(len(prop)):
+                                                            if ndc1 == str(prop[i]['ndc10']).replace('-', ''):
+                                                                # print(prop[i]['rxcui'])
+                                                                rxcui = prop[i]['rxcui']
+                                                                self.ndc.setText(prop[i]['ndc10'])
+                                                                j = 0
+                                                                for j in range(len(prop[i]['packagingList']['packaging'])):
+                                                                    pck += prop[i]['packagingList']['packaging'][j] + ', '
+                                                                self.pack.setText(pck.rstrip(', '))
+                                                                k = 0
+                                                                pp = prop[i]['propertyConceptList']['propertyConcept']
+                                                                for k in range(len(prop[i]['propertyConceptList']['propertyConcept'])):
+                                                                    if pp[k]['propName'] == "LABELER":
+                                                                        mfr += pp[k]['propValue'] + ', '
+                                                                self.mfr.setText(mfr.rstrip(', '))
+                                                                print(pp[k]['propValue'])
+
+                                                        r3 = requests.get('https://rxnav.nlm.nih.gov/REST/RxTerms/rxcui/%s/allinfo.json' % rxcui).text
+                                                        d3 = json.loads(r3)
+                                                        # print(json.dumps(d3, indent=3))
+                                                        self.str.setText(d3['rxtermsProperties']['strength'])
+                                                        self.dform.setText(d3['rxtermsProperties']['rxnormDoseForm'])
+                                                        self.route.setText(d3['rxtermsProperties']['route'])
+                                                        q = ''
+                                                        self.submitR.setEnabled(True)
+                                                        self.srx.setText('NOT IN SRX')
+                                                        self.image_res.setPixmap(nm)
+                                                        self.image_res.setMaximumWidth(50)
+                                                        log.write("API Call information for Scan {}: {} by {}; package: {}, NDC {}\n".format(
+                                                                scan, results['generic_name'], self.mfr.text(),
+                                                                self.pack.text(), prop[i]['ndc10']))
+                                                    else:
+                                                        pass
+                                                except Exception as e:
+                                                    print(e)
+                                            else: # Scan is in Barcode Info Collect Table #
+                                                log.write("A Duplicate Barcode Request for Scancode " + scan + " (NDC " + ndc1 + ") exists.\n")
+                                                os.system('afplay /System/Library/Sounds/funk.aiff')
+                                                QMessageBox.warning(self, 'Duplicate Request',"This Barcode has already been submitted.\nNo further action required.",
+                                                                    QMessageBox.Ok, QMessageBox.Ok)
+                                                self.scan.clear()
+                                                self.sndc.clear()
+                                                self.srx.clear()
+                                                self.scan.setFocus()
+                                                self.search1.setEnabled(False)
+                                                self.submitR.setEnabled(False)
+
+                        except Exception:
+                            log.write('Error Code 12: ParseScan2 parsing failed! Details: %s\n' + traceback.format_exc())
+                            # log.close()
+                else:
+                    QMessageBox.warning(self, 'Warning', 'This is not a valid scan.', QMessageBox.Ok, QMessageBox.Ok)
+                    self.scan.selectAll()
+                    self.scan.setFocus()
+
+            except Exception:
+                log.write('Error Code 13: ParseScan2 failed! Details: %s\n' + traceback.format_exc())
         log.close()
-        self.scan2.selectAll()
-        self.scan2.setFocus()
+        self.scan.selectAll()
+        self.scan.setFocus()
 
     def parseScan3(self):
         psnf = QPixmap("Match.png").scaledToHeight(25)
@@ -1955,11 +1556,8 @@ class initUi(QWidget):  # setting up UI elements#
                         self.psImage.clear()
             else:
                 ps = soup2.find_all(string='POLYSORBATE 80')
-
-                # print(ps,"2")
                 if not ps:
                     ps1 = soup2.find_all(string='Polysorbate 80')
-                    # print(ps1,'2')
                     if not ps1:
                         ps2 = soup2.find_all(string='polysorbate 80')
                         if not ps2:
@@ -1981,7 +1579,7 @@ class initUi(QWidget):  # setting up UI elements#
                     QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps[0]).capitalize(), QMessageBox.Ok, QMessageBox.Ok)
                     restext = ' This product DOES contain Polysorbate 80.'
                     self.psImage.clear()
-            # ndc = ''
+
             log = open("log.txt", "a+")
             log.write("\nResponse from DailyMed: " + self.ndc3.text() + restext)
             log.close()
@@ -1995,20 +1593,20 @@ class initUi(QWidget):  # setting up UI elements#
         q2 = "exec KBMADispR @createdwhen = ?, @MMNum = ?, @dose = ?, @NDC = ?, @Lot = ?, @Exp = ?, @User = ?, @ScanStatus = ?;"
         if len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0:
             QMessageBox.warning(self, "Warning", "All fields must have a value.", QMessageBox.Ok, QMessageBox.Ok)
-            self.scan2.selectAll()
-            self.scan2.setFocus()
-        elif self.f.count() == 22 and (len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0 or len(self.f.itemAt(19).widget().text()) == 0 or len(self.f.itemAt(21).widget().text()) == 0):
+            self.scan.selectAll()
+            self.scan.setFocus()
+        elif self.f.count() == 19 and (len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0 or len(self.f.itemAt(16).widget().text()) == 0 or len(self.f.itemAt(18).widget().text()) == 0):
             QMessageBox.warning(self, "Warning", "All fields must have a value.", QMessageBox.Ok, QMessageBox.Ok)
-            self.scan2.selectAll()
-            self.scan2.setFocus()
-        elif self.f.count() > 22 and (len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0 or len(self.f.itemAt(19).widget().text()) == 0 or len(self.f.itemAt(21).widget().text()) == 0 or len(self.f.itemAt(25).widget().text()) == 0 or len(self.f.itemAt(27).widget().text()) == 0):
+            self.scan.selectAll()
+            self.scan.setFocus()
+        elif self.f.count() > 19 and (len(self.lot2.text()) == 0 or len(self.exp2.text()) == 0 or len(self.f.itemAt(16).widget().text()) == 0 or len(self.f.itemAt(18).widget().text()) == 0 or len(self.f.itemAt(22).widget().text()) == 0 or len(self.f.itemAt(24).widget().text()) == 0):
             QMessageBox.warning(self, "Warning", "All fields must have a value.", QMessageBox.Ok, QMessageBox.Ok)
-            self.scan2.selectAll()
-            self.scan2.setFocus()
+            self.scan.selectAll()
+            self.scan.setFocus()
         elif self.lastScan.text() == "F":
             QMessageBox.warning(self, "Warning", "You can't submit with an Incorrect Scan. Please Scan again.", QMessageBox.Ok, QMessageBox.Ok)
-            self.scan2.selectAll()
-            self.scan2.setFocus()
+            self.scan.selectAll()
+            self.scan.setFocus()
 
         else:
             s1 = [datetime.datetime.now(), self.scan3.text(), self.doseN.text(), self.ndc2.text(), self.lot2.text(), self.exp2.text(), self.user.text(), self.lastScan.text()]
@@ -2026,29 +1624,29 @@ class initUi(QWidget):  # setting up UI elements#
                 cd.execute(q2, s1)
                 cd.commit()
 
-                if self.f.count() == 22:
-                    s1[3] = self.f.itemAt(17).widget().text()
-                    s1[4] = self.f.itemAt(19).widget().text()
-                    s1[5] = self.f.itemAt(21).widget().text()
+                if self.f.count() == 19:
+                    s1[3] = self.f.itemAt(14).widget().text()
+                    s1[4] = self.f.itemAt(16).widget().text()
+                    s1[5] = self.f.itemAt(18).widget().text()
                     # print(s1)
                     cd.execute(q2, s1)
                     cd.commit()
-                elif self.f.count() > 22:
-                    s1[3] = self.f.itemAt(17).widget().text()
-                    s1[4] = self.f.itemAt(19).widget().text()
-                    s1[5] = self.f.itemAt(21).widget().text()
+                elif self.f.count() > 19:
+                    s1[3] = self.f.itemAt(14).widget().text()
+                    s1[4] = self.f.itemAt(16).widget().text()
+                    s1[5] = self.f.itemAt(18).widget().text()
                     # print(s1)
                     rows = cd.execute(q2, s1)
                     cd.commit()
-                    s1[3] = self.f.itemAt(23).widget().text()
-                    s1[4] = self.f.itemAt(25).widget().text()
-                    s1[5] = self.f.itemAt(27).widget().text()
+                    s1[3] = self.f.itemAt(20).widget().text()
+                    s1[4] = self.f.itemAt(22).widget().text()
+                    s1[5] = self.f.itemAt(24).widget().text()
                     # print(s1)
                     cd.execute(q2, s1)
                     cd.commit()
             except pyodbc.Error as err:
                 log = open("log.txt", "a+")
-                log.write('Error Code 12: SubmitDisp failed! Details: %s\n' % err)
+                log.write('Error Code 14: SubmitDisp failed! Details: %s\n' % err)
                 log.close()
             cd.close()
             log = open("log.txt", "a+")
@@ -2057,10 +1655,10 @@ class initUi(QWidget):  # setting up UI elements#
             self.ndc2.clear()
             self.lot2.clear()
             self.exp2.clear()
-            self.image_res2.clear()
+            self.image_res.clear()
             self.scan3.clear()
             mNum = ''
-            item = 16
+            item = 13
             while item in range(self.f.count()):
                 # item += 1
                 self.it = self.f.itemAt(item).widget()
@@ -2072,13 +1670,13 @@ class initUi(QWidget):  # setting up UI elements#
 
             # print(self.f.count())
             self.res.clear()
-            self.scan2.clear()
+            self.scan.clear()
             self.srx2.clear()
             self.srp2.clear()
-            self.scan2.setFocus()
+            self.scan.setFocus()
             self.lexpi.clear()
             res = []
-            self.scan2.setFocus()
+            self.scan.setFocus()
 
     def rejFind(self):
         global ws
@@ -2124,7 +1722,7 @@ class initUi(QWidget):  # setting up UI elements#
                     rcursor2 = rejcnx.cursor()
                     rcursor2.execute(qd, rmNum)
                 except pyodbc.Error as err:
-                    log.write('Error Code 13: RejFind OrderLookup failed! Details: %s\n' % err)
+                    log.write('Error Code 15: RejFind OrderLookup failed! Details: %s\n' % err)
                     log.close()
                 row = rcursor2.fetchall()
                 # print(row)
@@ -2171,7 +1769,7 @@ class initUi(QWidget):  # setting up UI elements#
                 except pyodbc.Error as err:
                     QMessageBox.information(self, "Information", 'No results given by the Query', QMessageBox.Ok)
                     # print(err)
-                    log.write('Error Code 14: RejFind VerifySRx failed! Details: %s\n' % err)
+                    log.write('Error Code 16: RejFind VerifySRx failed! Details: %s\n' % err)
                     log.close()
                 rc6 = rcursor2.fetchall()
                 # print(rc6)
@@ -2211,7 +1809,7 @@ class initUi(QWidget):  # setting up UI elements#
             else:
                 self.rejScan.undo()
                 self.rejScan.undo()
-                self.scan2.setFocus()
+                self.scan.setFocus()
 
     def rejSubmit(self):
         global u
@@ -2293,7 +1891,7 @@ class initUi(QWidget):  # setting up UI elements#
                     # print("sent")
                 except Exception as e:
                     log = open("log.txt", "a+")
-                    log.write('Error Code 15: RejSubmit failed! Details: %s\n' % e)
+                    log.write('Error Code 17: RejSubmit failed! Details: %s\n' % e)
                     log.close()
             self.rejScan.clear()
             self.rejResult.clear()
