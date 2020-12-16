@@ -7,7 +7,7 @@ import winsound
 from ctypes import wintypes
 import traceback
 from bs4 import BeautifulSoup as bs
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
 import smtplib
 from email.mime.text import MIMEText
 import pandas as pd
@@ -107,7 +107,10 @@ class loginWindow(QDialog):
                 Base = 'dc=mskcc,dc=root,dc=mskcc,dc=org'
                 conn.search(search_base=Base, search_filter='(cn=' + u + ')', attributes=[ALL_ATTRIBUTES])
                 cd = json.loads(conn.response_to_json())
-                user = cd['entries'][0]['attributes']['extensionAttribute15']
+                if cd['entries'][0]['attributes'] == 'extensionAttribute15':
+                    user = cd['entries'][0]['attributes']['extensionAttribute15']
+                else:
+                    user = cd['entries'][0]['attributes']['givenName'] + " " + cd['entries'][0]['attributes']['sn']
                 try:
                     d = cd['entries'][0]['attributes']['memberOf']
                     if 'CN=GRP_PHA_Informatics,OU=ezGroups,OU=Resources,DC=MSKCC,DC=ROOT,DC=MSKCC,DC=ORG' in d:
@@ -537,271 +540,91 @@ class initUi(QWidget): #setting up UI elements#
         global run
         global log
         global ndc
+        pck = ''
+        mfr = ''
         self.srx.setText('')
         self.image_res.clear()
         sv = self.scans1.text()
-
+        nm = QPixmap("NoMatch.png").scaledToHeight(25)
+        m = QPixmap("Match.png").scaledToHeight(25)
         if sv == '':
             QMessageBox.warning(self, 'Warning', "Please Scan a Product First.", QMessageBox.Ok, QMessageBox.Ok)
         else:
-
-            params = {"labeltype": "all", "query": sv}
-            r = requests.get("https://dailymed.nlm.nih.gov/dailymed/search.cfm", params=params)
-            o = urlparse(r.url).query
-            q = o.replace("setid=", '')
-            # print(q)
-            soup = bs(r.text, "html5lib")
-            # print(soup)
-            dt = soup.find("td", {"class": "formHeadingTitle"}, string="Packaging")
-
-            if dt is None:
-                mdt = str(soup.find("a", {"class": "drug-info-link"}))
-                mdt = mdt[mdt.find("setid=") + 6:mdt.find("\">")]
-                if mdt == '':
-                    log = open("log.txt", "a+")
-                    log.write("Response from DailyMed: No Drug Package Labels found." + "\n")
-                    log.close()
-                    QMessageBox.warning(self, 'Warning', "No Drug Package Information found.\nPlease enter the information manually.", QMessageBox.Ok, QMessageBox.Ok)
-
-                    self.drug.setText('')
-                    self.srx.setText('')
-                    self.mfr.clear()
-                    self.route.clear()
-                    self.bname.clear()
-                    self.ndc.clear()
-                    self.pack.clear()
-                    self.str.clear()
-                    self.dform.clear()
-                    # self.scan.clear()
-                    self.scan.setFocus()
+            log = open('log.txt', 'a+')
+            try:  # API Calls to DailyMed, OpenFDA, NIH #
+                params = {"labeltype": "all", "query": sv}
+                r = requests.get("https://dailymed.nlm.nih.gov/dailymed/search.cfm", params=params)
+                o = urlparse(r.url).query
+                # print(o)
+                soup = bs(r.text, "html5lib")
+                if o.startswith('setid='):
+                    q = o.replace("setid=", '')
                 else:
-                    param1 = {"setid": mdt}
-                    r1 = requests.get("https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm", params=param1)
-                    s1 = bs(r1.text, "html5lib")
-                    dr = s1.find("td", {"class": "formLabel"}, string="Route of Administration").findNext("td").contents[0]
-                    url = "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/%s/packaging.json" % mdt
-
-                    source = requests.get(url).text
-                    d = json.loads(source)
-                    # print(json.dumps(d, indent=3))
-
-                    title = d['data']['title']
-                    d1 = title.replace(title[title.find("[") + 1:title.find("]")], '')
-                    # finding drug name #
-                    dt = d1.replace("[]", '')
-                    dt = dt.replace(dt[dt.find("("):dt.find(")") + 2], '')
-                    # Finding Labeler #
-                    mfr = title[title.find("[") + 1:title.find("]")]
-                    self.mfr.setText(mfr)
-                    self.route.setText(dr.title())
-                    self.drug.clear()
-                    self.pack.clear()
-                    self.dform.clear()
-
-                    for item in d['data']['products']:
-                        # Setting up lists length #
-                        # print(json.dumps(item, indent=3))
-                        i = len(item['active_ingredients'])
-                        p = len(item['packaging'])
-                        b = item['product_name']
-                        f = dt.replace(b + " ", '')
-                        f = f.replace(f[f.find('('):f.find(')') + 1], '')
-                        f = str(f).lstrip()
-                        self.dform.setText(f.capitalize())
-
-                        # Setting up variables for loops #
-                        j = 0
-                        k = 0
-                        l = 0
-                        # for multiple ingredients #
-                        n = ''
-                        j = 0
-
-                        if 'parts' in item:
-                            parts = len(item['parts'])
-                            #brand = item['product_name']
-                            #drug = item['product_name_generic']
-                            for l in range(parts):
-                                for j in range(len(item['parts'][str(l + 1)]['packaging'])):
-                                    ndc = item['parts'][str(l + 1)]['packaging'][j]['ndc']
-                                    if ndc.replace('-', '') == sv:
-                                        if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
-                                            desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
-                                        else:
-                                            desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
-                                        brand = str(item['product_name']).replace('\n',' ')
-                                        drug = item['product_name_generic']
-                                        if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
-                                            stg = ''
-                                        else:
-                                            stg = item['parts'][str(l + 1)]['active_ingredients'][0]['strength']
-                                            stg = stg.capitalize()
-                                        self.ndc.setText(ndc)
-                                        self.str.setText(str(stg))
-                                        self.pack.setText(desc)
-                                        self.drug.setText(drug)
-                                        self.bname.setText(brand)
-                                    else:
-                                        j = 0
-                                        for j in range(len(item['packaging'])):
-                                            ndc = item['packaging'][j]['ndc']
-                                            if ndc.replace('-', '') == sv:
-                                                brand = str(item['product_name']).replace('\n',' ')
-                                                drug = item['product_name_generic']
-                                                if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
-                                                    desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
-                                                else:
-                                                    desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
-                                                if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
-                                                    pass
-                                                else:
-                                                    stg = item['parts'][str(l + 1)]['active_ingredients'][0]['strength']
-                                                self.ndc.setText(ndc)
-                                                self.str.setText(str(stg))
-                                                self.pack.setText(desc)
-                                                self.drug.setText(drug)
-                                                self.bname.setText(brand)
-
-                        else:
-
-                            for j in range(p):
-                                if not item['packaging'][j]['ndc']:
-                                    pass
-                                else:
-                                    ndc = item['packaging'][j]['ndc']
-                                    if ndc.replace('-', '') == sv:
-                                        if len(item['packaging'][j]['package_descriptions']) > 1:
-                                            desc = item['packaging'][j]['package_descriptions'][l] + '; ' + item['packaging'][j]['package_descriptions'][k + 1]
-                                        else:
-                                            desc = item['packaging'][j]['package_descriptions'][l]
-                                        # print(desc)
-                                        brand = str(item['product_name']).replace('\n',' ')
-                                        drug = item['product_name_generic']
-                                        for k in range(len(item['active_ingredients'])):
-                                            if len(item['active_ingredients']) < 2:
-                                                n = item['active_ingredients'][k]['strength']
-                                            elif len(item['active_ingredients']) > 1:
-                                                n += item['active_ingredients'][k]['name'] + ' ' + item['active_ingredients'][k]['strength'] + ', '
-                                        stg = n.rstrip(', ').capitalize()
-                                        self.ndc.setText(ndc)
-                                        self.str.setText(str(stg))
-                                        self.pack.setText(desc)
-                                        self.drug.setText(drug)
-                                        self.bname.setText(brand)
-                                        log = open("log.txt", "a+")
-                                        log.write("Response from DailyMed:" + "\n" + str(dt) + '; ' + str(stg) + '; ' + ndc + '; ' + desc + '\n')
-                                        log.close()
-
-            else:
-                dr = soup.find("td", {"class": "formLabel"}, string="Route of Administration").findNext("td").contents[0]  # Finding Route of administration#
-                url = "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/%s/packaging.json" % q
-                source = requests.get(url).text
-                d = json.loads(source)
-                # print(json.dumps(d, indent=3))
-
-                title = d['data']['title']
-                d1 = title.replace(title[title.find("[") + 1:title.find("]")], '')
-                # finding drug name #
-                dt = d1.replace("[]", '')
-                dt = dt.replace(dt[dt.find("("):dt.find(")") + 1], '')
-                # Finding Labeler #
-                mfr = title[title.find("[") + 1:title.find("]")]
-                self.mfr.setText(mfr)
-                self.route.setText(dr.title())
-                self.drug.clear()
-                self.pack.clear()
-                self.dform.clear()
-
-                for item in d['data']['products']:
-                    # Setting up lists length #
-                    # print(json.dumps(item, indent=3))
-                    i = len(item['active_ingredients'])
-                    p = len(item['packaging'])
-                    b = item['product_name']
-                    f = dt[len(b) + 1:]
-                    f = f.replace(f[f.find('('):f.find(')') + 2], '')
-                    f = str(f).lstrip()
-                    self.dform.setText(f.capitalize())
-
-                    # Setting up variables for loops #
-                    j = 0
-                    k = 0
-                    l = 0
-                    n = ''
-                    j = 0
-                    if 'parts' in item:
-                        parts = len(item['parts'])
-                        #brand = item['product_name']
-                        #drug = item['product_name_generic']
-                        for l in range(parts):
-                            for j in range(len(item['parts'][str(l + 1)]['packaging'])):
-                                ndc = item['parts'][str(l + 1)]['packaging'][j]['ndc']
-                                if ndc.replace('-', '') == sv:
-                                    if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
-                                        desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
-                                    else:
-                                        desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
-                                    brand = str(item['product_name']).replace('\n',' ')
-                                    drug = item['product_name_generic']
-                                    if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
-                                        stg = ''
-                                    else:
-                                        stg = item['parts'][str(l + 1)]['active_ingredients'][0]['strength']
-                                        stg = stg.capitalize()
-                                    self.ndc.setText(ndc)
-                                    self.str.setText(str(stg))
-                                    self.pack.setText(desc)
-                                    self.drug.setText(drug)
-                                    self.bname.setText(brand)
-                                else:
-                                    j = 0
-                                    for j in range(len(item['packaging'])):
-                                        ndc = item['packaging'][j]['ndc']
-                                        if ndc.replace('-', '') == sv:
-                                            brand = str(item['product_name']).replace('\n',' ')
-                                            drug = item['product_name_generic']
-                                            if len(item['parts'][str(l + 1)]['packaging'][j]['package_descriptions']) > 1:
-                                                desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][l] + ";" + item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][k + 1]
-                                            else:
-                                                desc = item['parts'][str(l + 1)]['packaging'][j]['package_descriptions'][0]
-                                            if len(item['parts'][str(l + 1)]['active_ingredients']) == 0:
-                                                pass
-                                            else:
-                                                stg = item['parts'][str(l + 1)]['active_ingredients'][0]['strength']
-                                            self.ndc.setText(ndc)
-                                            self.str.setText(str(stg))
-                                            self.pack.setText(desc)
-                                            self.drug.setText(drug)
-                                            self.bname.setText(brand)
-
+                    mdt = str(soup.find("a", {"class": "drug-info-link"}))
+                    mdt = mdt[mdt.find("setid=") + 6:mdt.find("\">")]
+                    # print(mdt)
+                    if mdt == '':
+                        log.write(
+                            'Error Code 10: No Drug Package Information found in OpenFDA.\n')
+                        QMessageBox.warning(self, 'Warning', "No Information found in OpenFDA.\nPlease Enter Information Manually.",
+                                            QMessageBox.Ok, QMessageBox.Ok)
+                        q = ""
+                        self.image_res.setPixmap(nm)
+                        self.image_res.setMaximumWidth(50)
                     else:
-                        for j in range(p):
-                            if not item['packaging'][j]['ndc']:
-                                pass
-                            else:
-                                ndc = item['packaging'][j]['ndc']
-                                if ndc.replace('-', '') == sv:
-                                    if len(item['packaging'][j]['package_descriptions']) > 1:
-                                        desc = item['packaging'][j]['package_descriptions'][l] + '; ' + item['packaging'][j]['package_descriptions'][k + 1]
-                                    else:
-                                        desc = item['packaging'][j]['package_descriptions'][l]
-                                    brand = str(item['product_name']).replace('\n',' ')
-                                    drug = item['product_name_generic']
-                                    for k in range(len(item['active_ingredients'])):
-                                        if len(item['active_ingredients']) < 2:
-                                            n = item['active_ingredients'][k]['strength']
-                                        elif len(item['active_ingredients']) > 1:
-                                            n += item['active_ingredients'][k]['name'] + ' ' + item['active_ingredients'][k]['strength'] + ', '
-                                    stg = n.rstrip(', ').capitalize()
-                                    self.ndc.setText(ndc)
-                                    self.str.setText(str(stg))
-                                    self.pack.setText(desc)
-                                    self.drug.setText(drug)
-                                    self.bname.setText(brand)
-                                    log = open("log.txt", "a+")
-                                    log.write("Response from DailyMed:" + "\n" + str(dt) + '; ' + str(stg) + '; ' + ndc + '; ' + desc + '\n')
-                                    log.close()
-        self.submitR.setEnabled(True)
+                        q = mdt.replace("setid=", '')
+
+                if q != "":
+                    params = {'spl_id': '"%s"' % q}
+                    p = urlencode(params)
+                    r = requests.get('https://api.fda.gov/drug/ndc.json?search=%s' % p).text
+                    # print(r)
+                    res = json.loads(r)
+                    results = res['results'][0]
+                    #print(json.dumps(results, indent=3))
+                    self.drug.setText(results['generic_name'])
+                    self.bname.setText(results['brand_name'])
+                    param = {'id': q}
+                    r2 = requests.get('https://rxnav.nlm.nih.gov/REST/ndcproperties.json', params=param).text
+                    d2 = json.loads(r2)
+                    #print(json.dumps(d2, indent=3))
+                    prop = d2['ndcPropertyList']['ndcProperty']
+                    for i in range(len(prop)):
+                        if self.scans1.text() == str(prop[i]['ndc10']).replace('-', ''):
+                            # print(prop[i]['rxcui'])
+                            rxcui = prop[i]['rxcui']
+                            self.ndc.setText(prop[i]['ndc10'])
+                            j = 0
+                            for j in range(len(prop[i]['packagingList']['packaging'])):
+                                pck += prop[i]['packagingList']['packaging'][j] + ', '
+                            self.pack.setText(pck.rstrip(', '))
+                            k = 0
+                            pp = prop[i]['propertyConceptList']['propertyConcept']
+                            for k in range(len(prop[i]['propertyConceptList']['propertyConcept'])):
+                                if pp[k]['propName'] == "LABELER":
+                                    mfr += pp[k]['propValue'] + ', '
+                            self.mfr.setText(mfr.rstrip(', '))
+                            #print(pp[k]['propValue'])
+
+                    r3 = requests.get('https://rxnav.nlm.nih.gov/REST/RxTerms/rxcui/%s/allinfo.json' % rxcui).text
+                    d3 = json.loads(r3)
+                    # print(json.dumps(d3, indent=3))
+                    self.str.setText(d3['rxtermsProperties']['strength'])
+                    self.dform.setText(d3['rxtermsProperties']['rxnormDoseForm'])
+                    self.route.setText(d3['rxtermsProperties']['route'])
+                    q = ''
+                    self.submitR.setEnabled(True)
+                    self.srx.setText('NOT IN SRX')
+                    self.image_res.setPixmap(nm)
+                    self.image_res.setMaximumWidth(50)
+                    log.write("API Call information for Scan {}: {} by {}; package: {}, NDC {}\n".format(
+                        sv, results['generic_name'], self.mfr.text(),
+                        self.pack.text(), prop[i]['ndc10']))
+                else:
+                    pass
+            except Exception as e:
+                log.write('Error GetInfo: %s' % e)
+            log.close()
 
     def submitReq(self):
         global u
