@@ -1279,17 +1279,17 @@ class initUi(QWidget):  # setting up UI elements#
                                         self.image_res.setMaximumWidth(50)
                                         self.lastScan.setText("F")
                                         log.write('Incorrect Scan ' + ndc1 + '\n')
-                                    dl = (datetime.datetime.now(), self.scan3.text(), self.doseN.text(), str(ndc1), lot, exp,self.user.text(), self.lastScan.text())
-                                    # print(dl)
-                                    try:
-                                        q2 = "exec KBMADispR @createdwhen = ?, @MMNum = ?, @dose = ?, @NDC = ?, @Lot = ?, @Exp = ?, @User = ?, @ScanStatus = ?;"
-                                        cn2 = cnx2.cursor()
-                                        cn2.execute(q2, dl)
-                                        cn2.commit()
-                                    except pyodbc.Error as err:
-                                        log.write('Error Code 11: KBMADispR failed! Details: %s\n' % err)
-                                    cn2.close()
                                     if self.addItem.isHidden() and self.lastScan.text() == "P":
+                                        dl = (datetime.datetime.now(), self.scan3.text(), self.doseN.text(), str(ndc1), lot,exp, self.user.text(), self.lastScan.text())
+                                        # print(dl)
+                                        try:
+                                            q2 = "exec KBMADispR @createdwhen = ?, @MMNum = ?, @dose = ?, @NDC = ?, @Lot = ?, @Exp = ?, @User = ?, @ScanStatus = ?;"
+                                            cn2 = cnx2.cursor()
+                                            cn2.execute(q2, dl)
+                                            cn2.commit()
+                                        except pyodbc.Error as err:
+                                            log.write('Error Code 11: KBMADispR failed! Details: %s\n' % err)
+                                        cn2.close()
                                         self.scan3.clear()
                                     else:
                                         pass
