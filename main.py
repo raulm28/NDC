@@ -1431,7 +1431,7 @@ class initUi(QWidget):  # setting up UI elements#
                                                         self.dform.setText(d3['rxtermsProperties']['rxnormDoseForm'])
                                                         self.route.setText(d3['rxtermsProperties']['route'])
                                                         q = ''
-                                                        self.submitR.setEnabled(True)
+
                                                         self.srx.setText('NOT IN SRX')
                                                         self.image_res.setPixmap(nm)
                                                         self.image_res.setMaximumWidth(50)
@@ -1455,6 +1455,7 @@ class initUi(QWidget):  # setting up UI elements#
                                                 self.submitR.setEnabled(False)
                                     self.lot.setText(lot)
                                     self.exp.setText(exp)
+                                self.submitR.setEnabled(True)
                         except Exception:
                             log.write('Error Code 12: ParseScan2 parsing failed! Details: %s\n' + traceback.format_exc())
                             # log.close()
