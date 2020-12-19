@@ -566,7 +566,7 @@ class initUi(QWidget): #setting up UI elements#
                     if mdt == '':
                         log.write(
                             'Error Code 10: No Drug Package Information found in OpenFDA.\n')
-                        QMessageBox.warning(self, 'Warning', "No Information found in OpenFDA.\nPlease Enter Information Manually.",
+                        QMessageBox.warning(self, 'Warning', "No Information found for this Scancode.\nPlease Enter Information Manually.",
                                             QMessageBox.Ok, QMessageBox.Ok)
                         q = ""
                         self.image_res.setPixmap(nm)
@@ -613,7 +613,7 @@ class initUi(QWidget): #setting up UI elements#
                     self.dform.setText(d3['rxtermsProperties']['rxnormDoseForm'])
                     self.route.setText(d3['rxtermsProperties']['route'])
                     q = ''
-                    self.submitR.setEnabled(True)
+
                     self.srx.setText('NOT IN SRX')
                     self.image_res.setPixmap(nm)
                     self.image_res.setMaximumWidth(50)
@@ -624,6 +624,7 @@ class initUi(QWidget): #setting up UI elements#
                     pass
             except Exception as e:
                 log.write('Error GetInfo: %s' % e)
+            self.submitR.setEnabled(True)
             log.close()
 
     def submitReq(self):
