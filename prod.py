@@ -107,7 +107,10 @@ class loginWindow(QDialog):
                 Base = 'dc=mskcc,dc=root,dc=mskcc,dc=org'
                 conn.search(search_base=Base, search_filter='(cn=' + u + ')', attributes=[ALL_ATTRIBUTES])
                 cd = json.loads(conn.response_to_json())
-                user = cd['entries'][0]['attributes']['extensionAttribute15']
+                if cd['entries'][0]['attributes'] == 'extensionAttribute15':
+                    user = cd['entries'][0]['attributes']['extensionAttribute15']
+                else:
+                    user = cd['entries'][0]['attributes']['givenName'] + " " + cd['entries'][0]['attributes']['sn']
                 try:
                     d = cd['entries'][0]['attributes']['memberOf']
                     if 'CN=GRP_PHA_Informatics,OU=ezGroups,OU=Resources,DC=MSKCC,DC=ROOT,DC=MSKCC,DC=ORG' in d:
@@ -2401,13 +2404,6 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     login = loginWindow()
     app.setWindowIcon(QIcon("icon.png"))
-    # Set App Icon in Taskbar #
-    # myApp = "PharmOps"
-    # ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myApp)
-
-    # show app in tray icon area #
-    # trayIcon = QSystemTrayIcon(QIcon("icon.png"))
-    # trayIcon.show()
     if login.exec_() == QDialog.Accepted:
         window = mainWindow()
         window.show()
