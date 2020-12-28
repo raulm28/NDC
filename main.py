@@ -3,6 +3,7 @@
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import QTimer
+from stat import S_IREAD, S_IRGRP, S_IROTH, S_IRUSR, S_IWUSR, S_IWOTH
 # import ctypes
 # from ctypes import wintypes
 import traceback
@@ -28,7 +29,6 @@ import socket
 import datetime
 import requests
 import re
-import time
 
 val = False
 run = True
@@ -38,11 +38,10 @@ loc = ''
 num = ''
 email = ''
 scan = ''
-log = "log.txt"
+log = "redirx-test.log"
 sdt = datetime.datetime.now()
 w = socket.gethostname()
 ws = w.replace('.mskcc.org', '')
-t = 0
 
 
 class loginWindow(QDialog):
@@ -126,9 +125,9 @@ class loginWindow(QDialog):
             conn.unbind()
             conn.password = ''
             p = ''
-            log = open("log.txt", "a+")
-            log.write("\nSession started at " + str(sdt) + " by user " + user + " from Workstation " + ws + ", located at " + loc + "; Phone: " + str(num) + ";email: " + email + "\n")
-            log.close()
+            logw = open(log, "a+")
+            logw.write("\nSession started at " + str(sdt) + " by user " + user + " from Workstation " + ws + ", located at " + loc + "; Phone: " + str(num) + ";email: " + email + "\n")
+            logw.close()
 
       else:
          QMessageBox.warning(self, "Warning", "Your Password must be entered.", QMessageBox.Ok)
@@ -137,7 +136,6 @@ class loginWindow(QDialog):
 
 class mainWindow(QMainWindow):
    def __init__(self):
-      global t
       super().__init__()
       self.title = 'ReDi-Rx'
       self.left = 200
@@ -477,7 +475,7 @@ class initUi(QWidget):  # setting up UI elements#
       self.scan.setFocus()  # bring cursor to scan field upon start#
       self.show()
       self.timer = QTimer()
-      self.timer.start(3600000)
+      self.timer.start(14400000)
       self.timer.timeout.connect(self.closeApp)
 
    def closeApp(self):
@@ -531,7 +529,7 @@ class initUi(QWidget):  # setting up UI elements#
          # print(self.ndcCount, self.f.indexOf(self.ndc2), self.f.indexOf(self.ndcs[i+1]), self.f.count())
          self.ndcCount += 6
          self.ndcLine += 1
-      self.timer.start(3600000)
+      self.timer.start(14400000)
       self.scan.setFocus()
       self.scan.selectAll()
 
@@ -574,7 +572,7 @@ class initUi(QWidget):  # setting up UI elements#
       self.lexpi.clear()
       res = []
       self.scan.setFocus()
-      self.timer.start(3600000)
+      self.timer.start(14400000)
 
    def submitReq(self):
       global u
@@ -588,9 +586,8 @@ class initUi(QWidget):  # setting up UI elements#
          QMessageBox.warning(self, "Warning", "All fields must have a value.", QMessageBox.Ok, QMessageBox.Ok)
          self.scan.selectAll()
       else:
-         log = open("log.txt", "a+")
-         log.write('Submitted to Pharmacy Informatics on ' + str(datetime.datetime.now()) + ' by ' + self.user.text() + '\n')
-         log.close()
+         logw = open(log, "a+")
+         logw.write('Submitted to Pharmacy Informatics on ' + str(datetime.datetime.now()) + ' by ' + self.user.text() + '\n')
          sender = 'zzPDL_PHA_Informatics@mskcc.org'
          receiver = ['zzpdl_pha_informatics@mskcc.org', 'zzPDL_PHA_Billing_Compliance@mskcc.org']
          # receiver = 'molinar1@mskcc.org'
@@ -616,9 +613,7 @@ class initUi(QWidget):  # setting up UI elements#
             smtpObj.sendmail(sender, receiver, message)
             # print("sent")
          except Exception as e:
-            log = open("log.txt", "a+")
-            log.write('Error Code 1: Submit not successful! Details: %s\n' % e)
-            log.close()
+            logw.write('Error Code 1: Submit not successful! Details: %s\n' % e)
 
          s = [self.sndc.text(),
               self.ndc.text(),
@@ -675,16 +670,16 @@ class initUi(QWidget):  # setting up UI elements#
          self.lexp.clear()
          self.sndc.clear()
          self.scans1.clear()
-      self.timer.start(3600000)
+         logw.close()
+      self.timer.start(14400000)
 
    def add2Lexp(self):
       alexp = open('lexp.txt', "a+")
       alexp.write('\n' + self.newLexp.text())
       alexp.close()
-
-      log = open("log.txt", "a+")
-      log.write("New Item added: " + self.newLexp.text() + "\n")
-      log.close()
+      logw = open(log, "a+")
+      logw.write("New Item added: " + self.newLexp.text() + "\n")
+      logw.close()
 
       # Updating the table view#
       lines = []
@@ -711,7 +706,7 @@ class initUi(QWidget):  # setting up UI elements#
       QMessageBox.information(self, 'Message', "New Item Added: " + self.newLexp.text(), QMessageBox.Ok, QMessageBox.Ok)
       self.newLexp.clear()
       self.newLexp.setFocus()
-      self.timer.start(3600000)
+      self.timer.start(14400000)
 
    def rem2Lexp(self):
       row = self.lexpt.currentRow()
@@ -739,12 +734,13 @@ class initUi(QWidget):  # setting up UI elements#
             for column, data in enumerate(line):
                # print(line)
                self.lexpt.setItem(line[0], column, QTableWidgetItem(str(line[1])))
+      # This prevents edit from the table itself#
 
       self.lexpt.resizeColumnsToContents()
       self.lexpt.setEditTriggers(QAbstractItemView.NoEditTriggers)  # This prevents edit from the table itself#
       self.newLexp.setFocus()
       QMessageBox.information(self, 'Message', "Item Removed" + self.newLexp.text(), QMessageBox.Ok, QMessageBox.Ok)
-      self.timer.start(3600000)
+      self.timer.start(14400000)
 
    def getPi(self):
       self.piTable.clear()
@@ -760,9 +756,9 @@ class initUi(QWidget):  # setting up UI elements#
       try:
          c1.execute("SET NOCOUNT ON EXEC KBMAGetPI;")
       except pyodbc.Error as err:
-         log = open("log.txt", "a+")
-         log.write('Error Code 2: Association Requests not found! Details: %s\n' % err)
-         log.close()
+         logw = open(log, "a+")
+         logw.write('Error Code 2: Association Requests not found! Details: %s\n' % err)
+         logw.close()
 
       row = c1.fetchall()
       rc1 = len(row)
@@ -788,7 +784,7 @@ class initUi(QWidget):  # setting up UI elements#
          self.piTable.setEditTriggers(QAbstractItemView.NoEditTriggers)
          self.piTable.resizeColumnsToContents()
       c1.close()
-      self.timer.start(3600000)
+      self.timer.start(14400000)
 
    def submitPI(self):
       global piPlayer
@@ -796,7 +792,7 @@ class initUi(QWidget):  # setting up UI elements#
       global piSubmit2
       global ws
       row = self.piTable.currentRow()
-      log = open('log.txt', 'a+')
+      logw = open(log, 'a+')
       if row < 0:
          # print("Nothing Selected")
          QMessageBox.warning(self, 'Message', 'Nothing selected.', QMessageBox.Ok, QMessageBox.Ok)
@@ -819,8 +815,7 @@ class initUi(QWidget):  # setting up UI elements#
          try:
             c1.execute(qr, pi)
          except pyodbc.Error as err:
-            log.write('Error Code 3: Association Requests not performed! Details: %s\n' % err)
-            log.close()
+            logw.write('Error Code 3: Association Requests not performed! Details: %s\n' % err)
          rp = c1.fetchall()
          # print(rp)
          if not rp:
@@ -833,9 +828,7 @@ class initUi(QWidget):  # setting up UI elements#
             try:
                c1.execute("SET NOCOUNT ON EXEC KBMAGetPI;")
             except pyodbc.Error as err:
-               log = open("log.txt", "a+")
-               log.write('Error Code 4: Association Requests refresh not successful! Details: %s\n' % err)
-               log.close()
+               logw.write('Error Code 4: Association Requests refresh not successful! Details: %s\n' % err)
             row = c1.fetchall()
             rf = len(row)
             # print(rf)
@@ -862,12 +855,12 @@ class initUi(QWidget):  # setting up UI elements#
                os.system('afplay another.wav')
                os.system('afplay airhorn.wav')
                # c1.close()
-               log = open("log.txt", "a+")
-               log.write('Request for Scan ' + item + ' completed on ' + str(dtm) + " by " + self.user.text() + ".\n")
-               log.close()
+               logw.write('Request for Scan ' + item + ' completed on ' + str(dtm) + " by " + self.user.text() + ".\n")
          c1.commit()
          c1.close()
-      self.timer.start(3600000)
+      self.timer.start(14400000)
+      logw.close()
+
 
    def parseScan2(self):
       global log
@@ -896,7 +889,7 @@ class initUi(QWidget):  # setting up UI elements#
          self.srx2.clear()
          self.scan.setFocus()
       else:
-         log = open("log.txt", "a+")
+         logw = open(log, "a+")
          try:
             if scan.startswith('M0'):
                # print('2')
@@ -940,13 +933,12 @@ class initUi(QWidget):  # setting up UI elements#
                      cursor2 = cnx2.cursor()
                      cursor2.execute(qd, mNum)
                   except pyodbc.Error as err:
-                     log.write('Error Code 5: ParseScan2 OrderLookup failed! Details: %s\n' % err)
-                     # log.close()
+                     logw.write('Error Code 5: ParseScan2 OrderLookup failed! Details: %s\n' % err)
                   row = cursor2.fetchall()
                   # print(row)
                   if not row:
                      QMessageBox.warning(self, 'Warning', 'The Order scanned is no longer valid.', QMessageBox.Ok, QMessageBox.Ok)
-                     log.write('Error Code 6: ParseScan2 OrderLookup failed! Details: %s\n' % err)
+                     logw.write('Error Code 6: ParseScan2 OrderLookup failed! Details: %s\n' % err)
                      self.scan.clear()
                      self.srx2.clear()
                      self.scan.setFocus()
@@ -975,16 +967,14 @@ class initUi(QWidget):  # setting up UI elements#
                      # print(self.res.text())
                      # print(self.srx2.text())
                      cursor2.close()
-                     # log.write('\n' + "Verifying Order " + orderName + "\n")
-                     # log.close()
+                     logw.write('\n' + "Verifying Order " + orderName + "\n")
                   self.scan.clear()
                   self.scan.setFocus()
 
                elif len(self.lexpi.text()) != 0:
                   question = QMessageBox.question(self, 'Message', "Are you sure you want to cancel this dispense action?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                   if question == QMessageBox.Yes:
-                     log.write('Dispensing Information for an order was not submitted.\n')
-                     # log.close()
+                     logw.write('Dispensing Information for an order was not submitted.\n')
                      self.ndc2.clear()
                      self.lot2.clear()
                      self.exp2.clear()
@@ -1248,7 +1238,7 @@ class initUi(QWidget):  # setting up UI elements#
                         if len(self.scan3.text()) != 0:  # if the context is dispensing #
                            if ndc1 in self.res.text():
                               # print('found')
-                              log.write('Correct Scan ' + scan + "\n")
+                              logw.write('Correct Scan ' + scan + "\n")
                               os.system('afplay bing.wav')
                               pb = (self.sndc1.text(), ws)
                               cursor3 = cnx2.cursor()
@@ -1256,14 +1246,11 @@ class initUi(QWidget):  # setting up UI elements#
                               try:
                                  cursor3.execute(qb, pb)
                               except pyodbc.Error as err:
-                                 # log = open("log.txt", "a+")
-                                 log.write('Error Code 7: ParseScan VerifySRx failed! Details: %s\n' % err)
-                                 # log.close()
+                                 logw.write('Error Code 7: ParseScan VerifySRx failed! Details: %s\n' % err)
                               rc = cursor3.fetchall()
                               # print(rc)
                               self.srp2.setText(rc[0][1] + " by " + rc[0][3])
-                              log.write(rc[0][1] + " by " + rc[0][3] + '\n')
-                              log.close()
+                              logw.write(rc[0][1] + " by " + rc[0][3] + '\n')
                               self.image_res.setPixmap(m)
                               self.image_res.setMaximumWidth(50)
                               self.lastScan.setText("P")
@@ -1291,7 +1278,7 @@ class initUi(QWidget):  # setting up UI elements#
                               self.image_res.setPixmap(nm)
                               self.image_res.setMaximumWidth(50)
                               self.lastScan.setText("F")
-                              log.write('Incorrect Scan ' + ndc1 + '\n')
+                              logw.write('Incorrect Scan ' + ndc1 + '\n')
                            if self.addItem.isHidden():
                               dl = (datetime.datetime.now(), self.scan3.text(), self.doseN.text(), str(ndc1), lot, exp, self.user.text(), self.lastScan.text())
                               # print(dl)
@@ -1301,7 +1288,7 @@ class initUi(QWidget):  # setting up UI elements#
                                  cn2.execute(q2, dl)
                                  cn2.commit()
                               except pyodbc.Error as err:
-                                 log.write('Error Code 11: KBMADispR failed! Details: %s\n' % err)
+                                 logw.write('Error Code 11: KBMADispR failed! Details: %s\n' % err)
                               cn2.close()
                               if self.lastScan.text() == "P":
                                  self.scan3.clear()
@@ -1318,7 +1305,7 @@ class initUi(QWidget):  # setting up UI elements#
                               quest1 = QMessageBox.question(self, "Warning", "You're about to restart the Receiving process.\nAre you sure you want to proceed?",
                                                             QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                               if quest1 == QMessageBox.Yes:
-                                 log.write('Receiving Information for this product was not submitted.\nThe Process was restarted.')
+                                 logw.write('Receiving Information for this product was not submitted.\nThe Process was restarted.')
                                  self.ndc.clear()
                                  self.srx.clear()
                                  self.mfr.clear()
@@ -1357,11 +1344,11 @@ class initUi(QWidget):  # setting up UI elements#
                               try:  # Checking SRx Product Scan Table #
                                  cursor3.execute(qb, pb)
                               except pyodbc.Error as err:
-                                 log.write('Error Code 8: ParseScan VerifySRx failed! Details: %s\n' % err)
+                                 logw.write('Error Code 8: ParseScan VerifySRx failed! Details: %s\n' % err)
                               rc = cursor3.fetchall()
                               # print(rc)
                               if rc:  # Scan is in Product Scan Table #
-                                 log.write("Match Found for Scancode " + scan + " (NDC " + ndc1 + "): " + rc[0][1] + " by " + rc[0][3] + "\n")
+                                 logw.write("Match Found for Scancode " + scan + " (NDC " + ndc1 + "): " + rc[0][1] + " by " + rc[0][3] + "\n")
                                  self.srx.setText(rc[0][1] + " by " + rc[0][3])
                                  os.system('afplay bing.wav')
                                  self.image_res.setPixmap(m)
@@ -1372,13 +1359,11 @@ class initUi(QWidget):  # setting up UI elements#
                                  try:  # Checking Barcode Info Collect Table #
                                     cursor3.execute(qr, self.sndc1.text())
                                  except pyodbc.Error as err:
-                                    log.write('Error Code 9: ParseScan VerifyBarcode failed! Details: %s\n' % err)
-                                    # log.close()
+                                    logw.write('Error Code 9: ParseScan VerifyBarcode failed! Details: %s\n' % err)
                                  rb = cursor3.fetchall()
                                  # print(rb[0][0])
                                  if rb[0][0] == 0:  # Scan is NOT in Barcode Info Collect Table #
-                                    log.write("Scancode " + scan + " for NDC " + ndc1 + " not in SRx; New Request needed.\n")
-                                    # log.close()
+                                    logw.write("Scancode " + scan + " for NDC " + ndc1 + " not in SRx; New Request needed.\n")
                                     self.srx.setText("Not in SRx")
                                     os.system('afplay buzzer.wav')
                                     self.lastScan.setText("M")
@@ -1395,7 +1380,7 @@ class initUi(QWidget):  # setting up UI elements#
                                           mdt = mdt[mdt.find("setid=") + 6:mdt.find("\">")]
                                           # print(mdt)
                                           if mdt == '':
-                                             log.write(
+                                             logw.write(
                                                 'Error Code 10: No Drug Package Information found in OpenFDA.\n')
                                              QMessageBox.warning(self, 'Warning', "No Information found in OpenFDA.\nPlease Enter Information Manually.",
                                                                  QMessageBox.Ok, QMessageBox.Ok)
@@ -1448,7 +1433,7 @@ class initUi(QWidget):  # setting up UI elements#
                                           self.srx.setText('NOT IN SRX')
                                           self.image_res.setPixmap(nm)
                                           self.image_res.setMaximumWidth(50)
-                                          log.write("API Call information for Scan {}: {} by {}; package: {}, NDC {}\n".format(
+                                          logw.write("API Call information for Scan {}: {} by {}; package: {}, NDC {}\n".format(
                                              scan, results['generic_name'], self.mfr.text(),
                                              self.pack.text(), prop[i]['ndc10']))
                                        else:
@@ -1456,7 +1441,7 @@ class initUi(QWidget):  # setting up UI elements#
                                     except Exception as e:
                                        print(e)
                                  else:  # Scan is in Barcode Info Collect Table #
-                                    log.write("A Duplicate Barcode Request for Scancode " + scan + " (NDC " + ndc1 + ") exists.\n")
+                                    logw.write("A Duplicate Barcode Request for Scancode " + scan + " (NDC " + ndc1 + ") exists.\n")
                                     os.system('afplay /System/Library/Sounds/funk.aiff')
                                     QMessageBox.warning(self, 'Duplicate Request', "This Barcode has already been submitted.\nNo further action required.",
                                                         QMessageBox.Ok, QMessageBox.Ok)
@@ -1470,17 +1455,17 @@ class initUi(QWidget):  # setting up UI elements#
                            self.exp.setText(exp)
                         self.submitR.setEnabled(True)
                   except Exception:
-                     log.write('Error Code 12: ParseScan2 parsing failed! Details: %s\n' + traceback.format_exc())
-                     # log.close()
+                     logw.write('Error Code 12: ParseScan2 parsing failed! Details: %s\n' + traceback.format_exc())
+                     # logw.close()
             else:
                QMessageBox.warning(self, 'Warning', 'This is not a valid scan.', QMessageBox.Ok, QMessageBox.Ok)
                self.scan.selectAll()
                self.scan.setFocus()
 
          except Exception:
-            log.write('Error Code 13: ParseScan2 failed! Details: %s\n' + traceback.format_exc())
-      log.close()
-      self.timer.start(3600000)
+            logw.write('Error Code 13: ParseScan2 failed! Details: %s\n' + traceback.format_exc())
+      logw.close()
+      self.timer.start(14400000)
       self.scan.selectAll()
       self.scan.setFocus()
 
@@ -1598,14 +1583,13 @@ class initUi(QWidget):  # setting up UI elements#
                QMessageBox.warning(self, 'Information', 'This product contains ' + str(ps[0]).capitalize(), QMessageBox.Ok, QMessageBox.Ok)
                restext = ' This product DOES contain Polysorbate 80.'
                self.psImage.clear()
-
-         log = open("log.txt", "a+")
-         log.write("\nResponse from DailyMed: " + self.ndc3.text() + restext)
-         log.close()
+         logw = open(log, "a+")
+         logw.write("\nResponse from DailyMed: " + self.ndc3.text() + restext)
+         logw.close()
          self.ndc3.clear()
          self.psScan.clear()
          self.psScan.setFocus()
-      self.timer.start(3600000)
+      self.timer.start(14400000)
 
    def submitDisp(self):
       global log
@@ -1630,7 +1614,7 @@ class initUi(QWidget):  # setting up UI elements#
 
       else:
          s1 = [datetime.datetime.now(), self.scan3.text(), self.doseN.text(), self.ndc2.text(), self.lot2.text(), self.exp2.text(), self.user.text(), self.lastScan.text()]
-
+         logw = open(log, "a+")
          cdisp = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
                                 'Server=SCISTSQLPRI;'
                                 # 'Server=SCISPSQLPRI;'
@@ -1665,13 +1649,9 @@ class initUi(QWidget):  # setting up UI elements#
                cd.execute(q2, s1)
                cd.commit()
          except pyodbc.Error as err:
-            log = open("log.txt", "a+")
-            log.write('Error Code 14: SubmitDisp failed! Details: %s\n' % err)
-            log.close()
+            logw.write('Error Code 14: SubmitDisp failed! Details: %s\n' % err)
          cd.close()
-         log = open("log.txt", "a+")
-         log.write("Dispensing Information submitted for order " + self.srx2.text() + ", dose # " + self.doseN.text() + " on " + str(sdt) + " by " + self.user.text() + "\n")
-         log.close()
+         logw.write("Dispensing Information submitted for order " + self.srx2.text() + ", dose # " + self.doseN.text() + " on " + str(sdt) + " by " + self.user.text() + "\n")
          self.ndc2.clear()
          self.lot2.clear()
          self.exp2.clear()
@@ -1697,7 +1677,8 @@ class initUi(QWidget):  # setting up UI elements#
          self.lexpi.clear()
          res = []
          self.scan.setFocus()
-      self.timer.start(3600000)
+      self.timer.start(14400000)
+      logw.close()
 
    def rejFind(self):
       global ws
@@ -1711,7 +1692,7 @@ class initUi(QWidget):  # setting up UI elements#
                               'uid=MSKKBMA;'
                               'pwd=KBMA4Test;')
       # 'pwd=KBMA4Prod;')
-      log = open("log.txt", "a+")
+      logw = open(log, "a+")
       if len(self.rejResult.text()) == 0:
          if rscan.startswith("M"):
 
@@ -1743,8 +1724,7 @@ class initUi(QWidget):  # setting up UI elements#
                rcursor2 = rejcnx.cursor()
                rcursor2.execute(qd, rmNum)
             except pyodbc.Error as err:
-               log.write('Error Code 15: RejFind OrderLookup failed! Details: %s\n' % err)
-               log.close()
+               logw.write('Error Code 15: RejFind OrderLookup failed! Details: %s\n' % err)
             row = rcursor2.fetchall()
             # print(row)
             if not row:
@@ -1790,8 +1770,7 @@ class initUi(QWidget):  # setting up UI elements#
             except pyodbc.Error as err:
                QMessageBox.information(self, "Information", 'No results given by the Query', QMessageBox.Ok)
                # print(err)
-               log.write('Error Code 16: RejFind VerifySRx failed! Details: %s\n' % err)
-               log.close()
+               logw.write('Error Code 16: RejFind VerifySRx failed! Details: %s\n' % err)
             rc6 = rcursor2.fetchall()
             # print(rc6)
             if not rc6:
@@ -1814,8 +1793,7 @@ class initUi(QWidget):  # setting up UI elements#
                                          "Are you sure you want to cancel this Rejection Reporting?",
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
          if question == QMessageBox.Yes:
-            log.write('Rejection Information for scan ' + self.scan4.text() + ' was not submitted.\n')
-            log.close()
+            logw.write('Rejection Information for scan ' + self.scan4.text() + ' was not submitted.\n')
             self.rejScan.clear()
             self.rejResult.clear()
             self.rejDesc.clear()
@@ -1831,7 +1809,8 @@ class initUi(QWidget):  # setting up UI elements#
             self.rejScan.undo()
             self.rejScan.undo()
             self.scan.setFocus()
-      self.timer.start(3600000)
+      self.timer.start(14400000)
+      logw.close()
 
    def rejSubmit(self):
       global u
@@ -1912,9 +1891,9 @@ class initUi(QWidget):  # setting up UI elements#
                smtpObj.sendmail(sender, receiver, message.as_string())
                # print("sent")
             except Exception as e:
-               log = open("log.txt", "a+")
-               log.write('Error Code 17: RejSubmit failed! Details: %s\n' % e)
-               log.close()
+               logw = open(log, "a+")
+               logw.write('Error Code 17: RejSubmit failed! Details: %s\n' % e)
+               logw.close()
          self.rejScan.clear()
          self.rejResult.clear()
          self.rejDesc.clear()
@@ -1930,7 +1909,7 @@ class initUi(QWidget):  # setting up UI elements#
          self.rejExpField.setVisible(False)
          self.rejSub.setEnabled(False)
          self.rejScan.setFocus()
-      self.timer.start(3600000)
+      self.timer.start(14400000)
 
    def Dispensed(self):
       pandas.set_option('display.max_rows', 150000)
@@ -2013,7 +1992,7 @@ class initUi(QWidget):  # setting up UI elements#
          # QMessageBox.information(self,'Message', "Nothing to Report", QMessageBox.Ok, QMessageBox.Ok)
          # else:
          QMessageBox.information(self, 'Message', "Report Printed", QMessageBox.Ok, QMessageBox.Ok)
-      self.timer.start(3600000)
+      self.timer.start(14400000)
 
 
 # to start the application#
