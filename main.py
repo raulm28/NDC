@@ -484,7 +484,7 @@ class initUi(QWidget): #setting up UI elements#
         self.show()
 
         self.timer = QTimer()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
         self.timer.timeout.connect(self.closeApp)
 
     def closeApp(self):
@@ -540,7 +540,7 @@ class initUi(QWidget): #setting up UI elements#
             self.ndcLine += 1
         self.scan2.setFocus()
         self.scan2.selectAll()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def searchButton(self):
         global run
@@ -632,7 +632,7 @@ class initUi(QWidget): #setting up UI elements#
                 log.write('Error GetInfo: %s' % e)
             self.submitR.setEnabled(True)
             log.close()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def submitReq(self):
         global u
@@ -733,7 +733,7 @@ class initUi(QWidget): #setting up UI elements#
             self.lexp.clear()
             self.sndc.clear()
             self.scans1.clear()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def add2Lexp(self):
         alexp = open('lexp.txt',"a+")
@@ -769,7 +769,7 @@ class initUi(QWidget): #setting up UI elements#
         QMessageBox.information(self, 'Message', "New Item Added: "+ self.newLexp.text(), QMessageBox.Ok, QMessageBox.Ok)
         self.newLexp.clear()
         self.newLexp.setFocus()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def rem2Lexp(self):
         row = self.lexpt.currentRow()
@@ -806,7 +806,7 @@ class initUi(QWidget): #setting up UI elements#
         self.lexpt.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.newLexp.setFocus()
         QMessageBox.information(self, 'Message', "Item Removed" + self.newLexp.text(), QMessageBox.Ok, QMessageBox.Ok)
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def getPi(self):
         self.piTable.clear()
@@ -851,7 +851,7 @@ class initUi(QWidget): #setting up UI elements#
             self.piTable.setEditTriggers(QAbstractItemView.NoEditTriggers)
             self.piTable.resizeColumnsToContents()
         c1.close()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def submitPI(self):
         global piPlayer
@@ -931,7 +931,7 @@ class initUi(QWidget): #setting up UI elements#
                     log.close()
             c1.commit()
             c1.close()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def parseScan(self):
         global log
@@ -1253,7 +1253,7 @@ class initUi(QWidget): #setting up UI elements#
                 log.write('Error Code 7: ParseScan failed! Details: %s\n'% e)
         log.close()
         self.scan.selectAll()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def parseScan2(self):
         global log
@@ -1702,7 +1702,7 @@ class initUi(QWidget): #setting up UI elements#
         log.close()
         self.scan2.selectAll()
         self.scan2.setFocus()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def parseScan3(self):
         psnf = QPixmap("Match.png").scaledToHeight(25)
@@ -1828,7 +1828,7 @@ class initUi(QWidget): #setting up UI elements#
             self.ndc3.clear()
             self.psScan.clear()
             self.psScan.setFocus()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def submitDisp(self):
         global log
@@ -1920,7 +1920,7 @@ class initUi(QWidget): #setting up UI elements#
             self.lexpi.clear()
             res = []
             self.scan2.setFocus()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def rejFind(self):
         global ws
@@ -2054,7 +2054,7 @@ class initUi(QWidget): #setting up UI elements#
                 self.rejScan.undo()
                 self.rejScan.undo()
                 self.scan2.setFocus()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def rejSubmit(self):
         global u
@@ -2153,7 +2153,7 @@ class initUi(QWidget): #setting up UI elements#
             self.rejExpField.setVisible(False)
             self.rejSub.setEnabled(False)
             self.rejScan.setFocus()
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
     def Dispensed(self):
         pandas.set_option('display.max_rows', 150000)
@@ -2236,7 +2236,7 @@ class initUi(QWidget): #setting up UI elements#
             # QMessageBox.information(self,'Message', "Nothing to Report", QMessageBox.Ok, QMessageBox.Ok)
             # else:
             QMessageBox.information(self, 'Message', "Report Printed", QMessageBox.Ok, QMessageBox.Ok)
-        self.timer.start(3600000)
+        self.timer.start(14400000)
 
 #to start the application#
 if __name__ == "__main__":
