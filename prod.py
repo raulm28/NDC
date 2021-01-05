@@ -1147,7 +1147,7 @@ class initUi(QWidget):  # setting up UI elements#
             self.lot.clear()
             self.exp.clear()
             scan = self.scan.text()
-            scan = scan.replace('-', '')
+            scan = str(re.sub(r'[^\w]', '', scan))
             try:
                 bc_10 = (r'(?P<ndc>[0-9]{10})?$')
                 bc_10 = re.compile(bc_10)
@@ -1165,6 +1165,10 @@ class initUi(QWidget):  # setting up UI elements#
                 bc_cd_exp_lot = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
                 bc_cd_exp_lot = re.compile(bc_cd_exp_lot)
+
+                bc_cd_lot_exp = (
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>([\x21-\x22\x25-\x2F\x30-\x39\x3A-\x3F\x41-\x5A\x5F\x61-\x7A]{0,20}))17(?P<exp>[0-9]{6})?$')
+                bc_cd_lot_exp = re.compile(bc_cd_lot_exp)
 
                 bc_lot_exp = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})?$')
@@ -1264,9 +1268,11 @@ class initUi(QWidget):  # setting up UI elements#
                                                     if not match:
                                                         match = bc_plain1.match(scan)
                                                         if not match:
-                                                            match = bc_lot.match(scan)
+                                                            match = bc_cd_lot_exp.match(scan)
                                                             if not match:
                                                                 match = bc_cd_exp_lot.match(scan)
+                                                                if not match:
+                                                                    match = bc_lot.match(scan)
 
                     elif scan.startswith('00') and len(scan) > 10:
                         match = bc_10_1.match(scan)
@@ -1546,7 +1552,7 @@ class initUi(QWidget):  # setting up UI elements#
 
             # If no M-number has been scanned#
             elif not scan.startswith('M0'):
-                scan = scan.replace('-', '')
+                scan = str(re.sub(r'[^\w]', '', scan))
 
                 bc_10 = (r'(?P<ndc>[0-9]{10})?$')
                 bc_10 = re.compile(bc_10)
@@ -1564,6 +1570,10 @@ class initUi(QWidget):  # setting up UI elements#
                 bc_cd_exp_lot = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
                 bc_cd_exp_lot = re.compile(bc_cd_exp_lot)
+
+                bc_cd_lot_exp = (
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>([\x21-\x22\x25-\x2F\x30-\x39\x3A-\x3F\x41-\x5A\x5F\x61-\x7A]{0,20}))17(?P<exp>[0-9]{6})?$')
+                bc_cd_lot_exp = re.compile(bc_cd_lot_exp)
 
                 bc_lot_exp = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})?$')
@@ -1700,9 +1710,11 @@ class initUi(QWidget):  # setting up UI elements#
                                                         if not match:
                                                             match = bc_plain1.match(scan)
                                                             if not match:
-                                                                match = bc_lot.match(scan)
-                                                                if not match:
-                                                                    match = bc_cd_exp_lot.match(scan)
+                                                               match = bc_cd_lot_exp.match(scan)
+                                                               if not match:
+                                                                  match = bc_cd_exp_lot.match(scan)
+                                                                  if not match:
+                                                                    match = bc_lot.match(scan)
 
                         elif scan.startswith('00') and len(scan) > 10:
                             match = bc_10_1.match(scan)
