@@ -551,6 +551,9 @@ class initUi(QWidget): #setting up UI elements#
         global ndc
         pck = ''
         mfr = ''
+        rt = ''
+        st = ''
+        prop = ''
         self.srx.setText('')
         self.image_res.clear()
         sv = self.scans1.text()
@@ -591,44 +594,60 @@ class initUi(QWidget): #setting up UI elements#
                     # print(r)
                     res = json.loads(r)
                     results = res['results'][0]
-                    # print(json.dumps(results, indent=3))
+                    # print('From FDA:\n',json.dumps(results, indent=3))
                     self.drug.setText(results['generic_name'])
                     self.bname.setText(results['brand_name'])
                     param = {'id': q}
                     r2 = requests.get('https://rxnav.nlm.nih.gov/REST/ndcproperties.json', params=param).text
                     d2 = json.loads(r2)
-                    # print(json.dumps(d2, indent=3))
-                    prop = d2['ndcPropertyList']['ndcProperty']
-                    for i in range(len(prop)):
-                        if self.scans1.text() == str(prop[i]['ndc10']).replace('-', ''):
-                            # print(prop[i]['rxcui'])
-                            rxcui = prop[i]['rxcui']
-                            self.ndc.setText(prop[i]['ndc10'])
-                            j = 0
-                            for j in range(len(prop[i]['packagingList']['packaging'])):
-                                pck += prop[i]['packagingList']['packaging'][j] + ', '
-                            self.pack.setText(pck.rstrip(', '))
-                            k = 0
-                            pp = prop[i]['propertyConceptList']['propertyConcept']
-                            for k in range(len(prop[i]['propertyConceptList']['propertyConcept'])):
-                                if pp[k]['propName'] == "LABELER":
-                                    mfr += pp[k]['propValue'] + ', '
-                            self.mfr.setText(mfr.rstrip(', '))
-                            # print(pp[k]['propValue'])
+                    # print('From NIH ndc properties:\n',json.dumps(d2, indent=3))
+                    if not d2:
+                        self.ndc.setText(results['packaging'][0]['package_ndc'])
+                        self.pack.setText(results['packaging'][0]['description'])
+                        self.mfr.setText(results['labeler_name'])
+                        self.dform.setText(results['dosage_form'])
+                        l = 0
+                        for l in range(len(results['route'])):
+                            rt += results['route'][l] + ', '
+                        # print(rt)
+                        self.route.setText(rt.rstrip(', '))
+                        l = 0
+                        for l in range(len(results['active_ingredients'])):
+                            st += results['active_ingredients'][l]['strength'] + ', '
+                        self.str.setText(st.rstrip(', '))
+                    else:
+                        prop = d2['ndcPropertyList']['ndcProperty']
+                        for i in range(len(prop)):
+                            if self.scans1.text() == str(prop[i]['ndc10']).replace('-', ''):
+                                # print(prop[i]['rxcui'])
+                                rxcui = prop[i]['rxcui']
+                                self.ndc.setText(prop[i]['ndc10'])
+                                j = 0
+                                for j in range(len(prop[i]['packagingList']['packaging'])):
+                                    pck += prop[i]['packagingList']['packaging'][j] + ', '
+                                self.pack.setText(pck.rstrip(', '))
+                                k = 0
+                                pp = prop[i]['propertyConceptList']['propertyConcept']
+                                for k in range(len(prop[i]['propertyConceptList']['propertyConcept'])):
+                                    if pp[k]['propName'] == "LABELER":
+                                        mfr += pp[k]['propValue'] + ', '
+                                self.mfr.setText(mfr.rstrip(', '))
+                                # print(pp[k]['propValue'])
 
-                    r3 = requests.get('https://rxnav.nlm.nih.gov/REST/RxTerms/rxcui/%s/allinfo.json' % rxcui).text
-                    d3 = json.loads(r3)
-                    # print(json.dumps(d3, indent=3))
-                    self.str.setText(d3['rxtermsProperties']['strength'])
-                    self.dform.setText(d3['rxtermsProperties']['rxnormDoseForm'])
-                    self.route.setText(d3['rxtermsProperties']['route'])
-                    q = ''
+                        r3 = requests.get('https://rxnav.nlm.nih.gov/REST/RxTerms/rxcui/%s/allinfo.json' % rxcui).text
+                        d3 = json.loads(r3)
+                        # print('From nih rxcui info:\n',json.dumps(d3, indent=3))
+
+                        self.str.setText(d3['rxtermsProperties']['strength'])
+                        self.dform.setText(d3['rxtermsProperties']['rxnormDoseForm'])
+                        self.route.setText(d3['rxtermsProperties']['route'])
+                        q = ''
 
                     self.srx.setText('NOT IN SRX')
                     self.image_res.setPixmap(nm)
                     self.image_res.setMaximumWidth(50)
                     logw.write("API Call information for Scan {}: {} by {}; package: {}, NDC {}\n".format(
-                        sv, results['generic_name'], self.mfr.text(),
+                        scan, results['generic_name'], self.mfr.text(),
                         self.pack.text(), prop[i]['ndc10']))
                 else:
                     pass
@@ -987,7 +1006,7 @@ class initUi(QWidget): #setting up UI elements#
             self.lot.clear()
             self.exp.clear()
             scan = self.scan.text()
-            scan = scan.replace('-','')
+            scan = str(re.sub(r'[^\w]', '', scan))
             try:
                 bc_10 = (r'(?P<ndc>[0-9]{10})?$')
                 bc_10 = re.compile(bc_10)
@@ -1005,6 +1024,10 @@ class initUi(QWidget): #setting up UI elements#
                 bc_cd_exp_lot = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
                 bc_cd_exp_lot = re.compile(bc_cd_exp_lot)
+
+                bc_cd_lot_exp = (
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>([\x21-\x22\x25-\x2F\x30-\x39\x3A-\x3F\x41-\x5A\x5F\x61-\x7A]{0,20}))17(?P<exp>[0-9]{6})?$')
+                bc_cd_lot_exp = re.compile(bc_cd_lot_exp)
 
                 bc_lot_exp = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})?$')
@@ -1104,9 +1127,11 @@ class initUi(QWidget): #setting up UI elements#
                                                     if not match:
                                                         match = bc_plain1.match(scan)
                                                         if not match:
-                                                            match = bc_lot.match(scan)
+                                                            match = bc_cd_lot_exp.match(scan)
                                                             if not match:
                                                                 match = bc_cd_exp_lot.match(scan)
+                                                                if not match:
+                                                                    match = bc_lot.match(scan)
 
                     elif scan.startswith('00') and len(scan) > 10:
                         match = bc_10_1.match(scan)
@@ -1382,7 +1407,7 @@ class initUi(QWidget): #setting up UI elements#
 
             # If no M-number has been scanned#
             elif not scan.startswith('M'):
-                scan = scan.replace('-','')
+                scan = str(re.sub(r'[^\w]', '', scan))
 
                 bc_10 = (r'(?P<ndc>[0-9]{10})?$')
                 bc_10 = re.compile(bc_10)
@@ -1400,6 +1425,10 @@ class initUi(QWidget): #setting up UI elements#
                 bc_cd_exp_lot = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})17(?P<exp>[0-9]{6})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})?$')
                 bc_cd_exp_lot = re.compile(bc_cd_exp_lot)
+
+                bc_cd_lot_exp = (
+                    r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})(?P<check_dig>[0-9]{1})10(?P<lot>([\x21-\x22\x25-\x2F\x30-\x39\x3A-\x3F\x41-\x5A\x5F\x61-\x7A]{0,20}))17(?P<exp>[0-9]{6})?$')
+                bc_cd_lot_exp = re.compile(bc_cd_lot_exp)
 
                 bc_lot_exp = (
                     r'(01|\(01\))(?P<pad>[0-9]{3})(?P<ndc>[0-9]{10})10(?P<lot>[\x21-\x22\x25-\x2F\x30-\x39\x41-\x5A\x5F\x61-\x7A]{0,20})17(?P<exp>[0-9]{6})?$')
@@ -1546,9 +1575,11 @@ class initUi(QWidget): #setting up UI elements#
                                                         if not match:
                                                             match = bc_plain1.match(scan)
                                                             if not match:
-                                                                match = bc_lot.match(scan)
+                                                                match = bc_cd_lot_exp.match(scan)
                                                                 if not match:
                                                                     match = bc_cd_exp_lot.match(scan)
+                                                                    if not match:
+                                                                        match = bc_lot.match(scan)
 
                         elif scan.startswith('00') and len(scan) > 10:
                             match = bc_10_1.match(scan)
