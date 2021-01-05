@@ -871,6 +871,9 @@ class initUi(QWidget):  # setting up UI elements#
       ing = ''
       pck = ""
       mfr = ""
+      st =''
+      rt=''
+      rxcui= ''
       qb = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifySRx @barcode = ?, @LocationStr = ?;"
       nm = QPixmap("NoMatch.png").scaledToHeight(45)
       m = QPixmap("Match.png").scaledToHeight(45)
@@ -1403,38 +1406,54 @@ class initUi(QWidget):  # setting up UI elements#
                                           # print(r)
                                           res = json.loads(r)
                                           results = res['results'][0]
-                                          print(json.dumps(results, indent=3))
+                                          # print('From FDA:\n',json.dumps(results, indent=3))
                                           self.drug.setText(results['generic_name'])
                                           self.bname.setText(results['brand_name'])
                                           param = {'id': q}
                                           r2 = requests.get('https://rxnav.nlm.nih.gov/REST/ndcproperties.json', params=param).text
                                           d2 = json.loads(r2)
-                                          print(json.dumps(d2, indent=3))
-                                          prop = d2['ndcPropertyList']['ndcProperty']
-                                          for i in range(len(prop)):
-                                             if ndc1 == str(prop[i]['ndc10']).replace('-', ''):
-                                                # print(prop[i]['rxcui'])
-                                                rxcui = prop[i]['rxcui']
-                                                self.ndc.setText(prop[i]['ndc10'])
-                                                j = 0
-                                                for j in range(len(prop[i]['packagingList']['packaging'])):
-                                                   pck += prop[i]['packagingList']['packaging'][j] + ', '
-                                                self.pack.setText(pck.rstrip(', '))
-                                                k = 0
-                                                pp = prop[i]['propertyConceptList']['propertyConcept']
-                                                for k in range(len(prop[i]['propertyConceptList']['propertyConcept'])):
-                                                   if pp[k]['propName'] == "LABELER":
-                                                      mfr += pp[k]['propValue'] + ', '
-                                                self.mfr.setText(mfr.rstrip(', '))
-                                                print(pp[k]['propValue'])
+                                          # print('From NIH ndc properties:\n',json.dumps(d2, indent=3))
+                                          if not d2:
+                                             self.ndc.setText(results['packaging'][0]['package_ndc'])
+                                             self.pack.setText(results['packaging'][0]['description'])
+                                             self.mfr.setText(results['labeler_name'])
+                                             self.dform.setText(results['dosage_form'])
+                                             l = 0
+                                             for l in range(len(results['route'])):
+                                                rt += results['route'][l] + ', '
+                                             # print(rt)
+                                             self.route.setText(rt.rstrip(', '))
+                                             l = 0
+                                             for l in range(len(results['active_ingredients'])):
+                                                st += results['active_ingredients'][l]['strength'] + ', '
+                                             self.str.setText(st.rstrip(', '))
+                                          else:
+                                             prop = d2['ndcPropertyList']['ndcProperty']
+                                             for i in range(len(prop)):
+                                                if ndc1 == str(prop[i]['ndc10']).replace('-', ''):
+                                                   # print(prop[i]['rxcui'])
+                                                   rxcui = prop[i]['rxcui']
+                                                   self.ndc.setText(prop[i]['ndc10'])
+                                                   j = 0
+                                                   for j in range(len(prop[i]['packagingList']['packaging'])):
+                                                      pck += prop[i]['packagingList']['packaging'][j] + ', '
+                                                   self.pack.setText(pck.rstrip(', '))
+                                                   k = 0
+                                                   pp = prop[i]['propertyConceptList']['propertyConcept']
+                                                   for k in range(len(prop[i]['propertyConceptList']['propertyConcept'])):
+                                                      if pp[k]['propName'] == "LABELER":
+                                                         mfr += pp[k]['propValue'] + ', '
+                                                   self.mfr.setText(mfr.rstrip(', '))
+                                                   # print(pp[k]['propValue'])
 
-                                          r3 = requests.get('https://rxnav.nlm.nih.gov/REST/RxTerms/rxcui/%s/allinfo.json' % rxcui).text
-                                          d3 = json.loads(r3)
-                                          # print(json.dumps(d3, indent=3))
-                                          self.str.setText(d3['rxtermsProperties']['strength'])
-                                          self.dform.setText(d3['rxtermsProperties']['rxnormDoseForm'])
-                                          self.route.setText(d3['rxtermsProperties']['route'])
-                                          q = ''
+                                             r3 = requests.get('https://rxnav.nlm.nih.gov/REST/RxTerms/rxcui/%s/allinfo.json' % rxcui).text
+                                             d3 = json.loads(r3)
+                                             # print('From nih rxcui info:\n',json.dumps(d3, indent=3))
+
+                                             self.str.setText(d3['rxtermsProperties']['strength'])
+                                             self.dform.setText(d3['rxtermsProperties']['rxnormDoseForm'])
+                                             self.route.setText(d3['rxtermsProperties']['route'])
+                                             q = ''
 
                                           self.srx.setText('NOT IN SRX')
                                           self.image_res.setPixmap(nm)
