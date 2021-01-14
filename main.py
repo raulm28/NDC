@@ -79,10 +79,10 @@ class loginWindow(QDialog):
             #                     QMessageBox.Ok, QMessageBox.Ok)
             loc = 'Unassigned WS'
             num = '999-999-9999'
-            email = 'zzPDL_PHA_Informatics@mskcc.org'
+            email = '@mskcc.org'
         else:
             if locnum.loc[locnum['WSID'] == ws, 'email'].empty:
-                email = 'zzPDL_PHA_Informatics@mskcc.org'
+                email = '@mskcc.org'
             else:
                 email = locnum.loc[locnum['WSID'] == ws, 'email'].iloc[0]
             if locnum.loc[locnum['WSID'] == ws, 'Contact#'].empty:
@@ -673,8 +673,8 @@ class initUi(QWidget): #setting up UI elements#
             os.chmod(log, S_IWUSR | S_IREAD)
             logw = open(log, "a+")
             logw.write('Submitted scancode information for scan ' + self.scan.text() + ' to Pharmacy Informatics on ' + str(datetime.datetime.now()) + ' by ' + self.user.text() + '\n')
-            sender = 'zzPDL_PHA_Informatics@mskcc.org'
-            receiver = ['zzpdl_pha_informatics@mskcc.org','zzPDL_PHA_Billing_Compliance@mskcc.org']
+            sender = '@mskcc.org'
+            receiver = ['@mskcc.org','@mskcc.org']
             #receiver = 'molinar1@mskcc.org'
             message = ("Subject: New KBMA Barcode Request\nThis is a test from my Python app\n" +
                         "\nSubmitted by: "+ user+" ("+u+"@mskcc.org)"+
@@ -712,13 +712,13 @@ class initUi(QWidget): #setting up UI elements#
                  email]
                  #self.user.text()+'@mskcc.org']
             cnx0 = pyodbc.connect('Driver={SQL Server};'
-                            'Server=SCISTSQLPRI;'
-                           # 'Server=SCISPSQLPRI;'
-                            'Database=Test;'
-                           # 'Database=Prod;'
-                            'uid=MSKKBMA;'
-                            'pwd=KBMA4Test;')
-                           # 'pwd=KBMA4Prod;')
+                            'Server=;'
+                           # 'Server=;'
+                            'Database=;'
+                           # 'Database=;'
+                            'uid=;'
+                            'pwd=;')
+                           # 'pwd=;')
 
             c0 = cnx0.cursor()
             rows = c0.execute('exec MSKKBMA.KBMASaveDrugBarcodeInfoCollection '
@@ -834,13 +834,13 @@ class initUi(QWidget): #setting up UI elements#
     def getPi(self):
         self.piTable.clear()
         cnx1 = pyodbc.connect('Driver={SQL Server};'
-                              # 'Server=SCISPSQLPRI;'
-                              'Server=SCISTSQLPRI;'
-                              'Database=Test;'
-                              # 'Database=Prod;'
-                              'UID=MSKKBMA;'
-                              'PWD=KBMA4Test;')
-                              # 'PWD=KBMA4Prod;')
+                              # 'Server=;'
+                              'Server=;'
+                              'Database=;'
+                              # 'Database=;'
+                              'UID=;'
+                              'PWD=;')
+                              # 'PWD=;')
 
         c1 = cnx1.cursor()
         try:
@@ -895,13 +895,13 @@ class initUi(QWidget): #setting up UI elements#
             pi = (item, ws)
             dtm = datetime.datetime.now()
             cnx1 = pyodbc.connect('Driver={SQL Server};'
-                                  'Server=SCISTSQLPRI;'
-                                  # 'Server=SCISPSQLPRI;'
-                                  'Database=Test;'
-                                  # 'Database=Prod;'
-                                  'uid=MSKKBMA;'
-                                  'PWD=KBMA4Test;')
-                                 # 'PWD=KBMA4Prod;')
+                                  'Server=;'
+                                  # 'Server=;'
+                                  'Database=;'
+                                  # 'Database=;'
+                                  'uid=;'
+                                  'PWD=;')
+                                 # 'PWD=;')
 
             c1 = cnx1.cursor()
             qr = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifySRx @barcode = ?, @LocationStr = ?;"
@@ -1202,13 +1202,13 @@ class initUi(QWidget): #setting up UI elements#
                             serial = ''
 
                         cnx = pyodbc.connect('Driver={SQL Server};'
-                                             'Server=SCISTSQLPRI;'
-                                             # 'Server=SCISPSQLPRI;'
-                                             'Database=Test;'
-                                             # 'Database=Prod;'
-                                             'uid=MSKKBMA;'
-                                             'pwd=KBMA4Test;')
-                                             # 'pwd=KBMA4Prod;')
+                                             'Server=;'
+                                             # 'Server=;'
+                                             'Database=;'
+                                             # 'Database=;'
+                                             'uid=;'
+                                             'pwd=;')
+                                             # 'pwd=;')
 
                         cursor = cnx.cursor()
                         qb = "SET NOCOUNT ON EXEC MSKKBMA.KBMAVerifySRx @barcode = ?, @LocationStr = ?;"
@@ -1288,13 +1288,13 @@ class initUi(QWidget): #setting up UI elements#
         nm = QPixmap("NoMatch.png").scaledToHeight(45)
         m = QPixmap("Match.png").scaledToHeight(45)
         cnx2 = pyodbc.connect('Driver={SQL Server};'
-                              # 'Server=SCISPSQLPRI;'
-                              'Server=SCISTSQLPRI;'
-                              # 'Database=Prod;'
-                              'Database=Test;'
-                              'UID=MSKKBMA;'
-                              'PWD=KBMA4Test;')
-                             # 'PWD=KBMA4Prod;')
+                              # 'Server=;'
+                              'Server=;'
+                              # 'Database=;'
+                              'Database=;'
+                              'UID=;'
+                              'PWD=;')
+                             # 'PWD=;')
         os.chmod(log, S_IWUSR | S_IREAD)
         logw = open(log, "a+")
         try:
@@ -1882,13 +1882,13 @@ class initUi(QWidget): #setting up UI elements#
             os.chmod(log, S_IWUSR | S_IREAD)
             logw = open(log, "a+")
             cdisp = pyodbc.connect('Driver={SQL Server};'
-                                 'Server=SCISTSQLPRI;'
-                                # 'Server=SCISPSQLPRI;'
-                                 'Database=Test;'
-                                # 'Database=Prod;'
-                                 'uid=MSKKBMA;'
-                                 'pwd=KBMA4Test;')
-                                # 'pwd=KBMA4Prod;')
+                                 'Server=;'
+                                # 'Server=;'
+                                 'Database=;'
+                                # 'Database=;'
+                                 'uid=;'
+                                 'pwd=;')
+                                # 'pwd=;')
             try:
                 cd = cdisp.cursor()
                 cd.execute(q2, s1)
@@ -1952,12 +1952,12 @@ class initUi(QWidget): #setting up UI elements#
         global log
         rscan = self.rejScan.text()
         rejcnx = pyodbc.connect('Driver={SQL Server};'
-                                'Server=SCISTSQLPRI;'
-                                # 'Server=SCISPSQLPRI;'
-                                'Database=Test;'
-                                # 'Database=Prod;'
-                                'uid=MSKKBMA;'
-                                'pwd=KBMA4Test;')
+                                'Server=;'
+                                # 'Server=;'
+                                'Database=;'
+                                # 'Database=;'
+                                'uid=;'
+                                'pwd=;')
         # 'pwd=KBMA4Prod;')
         os.chmod(log, S_IWUSR | S_IREAD)
         logw = open(log, "a+")
@@ -2084,15 +2084,15 @@ class initUi(QWidget): #setting up UI elements#
     def rejSubmit(self):
         global u
         rejcnx = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};'
-                                # 'Server=SCISTSQLPRI;'
-                                # 'Server=SCISPSQLPRI;'
-                                'Server=WMEDE002\MSKCC;'
-                                # 'Database=Test;'
-                                # 'Database=Prod;'
-                                'Database=PRODNF;'
-                                # 'uid=MSKKBMA;'
-                                # 'pwd=KBMA4Test;')
-                                'Trusted_Connection=yes;')
+                                # 'Server=;'
+                                # 'Server=;'
+                                'Server=;'
+                                # 'Database=;'
+                                # 'Database=;'
+                                'Database=;'
+                                # 'uid=;'
+                                # 'pwd=;')
+                                'Trusted_Connection=;')
         # 'pwd=KBMA4Prod;')
         rq = "Insert into RejectionReport VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         rcomm = self.rejComField.toPlainText()
@@ -2119,7 +2119,7 @@ class initUi(QWidget): #setting up UI elements#
             recrej.commit()
             recrej.close()
             if self.reasonDrop.currentText() == "Wrong Drug":
-                sender = 'zzPDL_PHA_Informatics@mskcc.org'
+                sender = ''
                 receiver = ['molinar1@mskcc.org']
                 # receiver = 'molinar1@mskcc.org'
                 if self.rejType.text() == "Order":
@@ -2188,9 +2188,9 @@ class initUi(QWidget): #setting up UI elements#
         pandas.set_option('display.width', 100000)
 
         cnx = pyodbc.connect('Driver={SQL Server};'
-                             'Server=SCISTSQLPRI;'
-                             'Database=Test;'
-                             'Trusted_Connection=yes;')
+                             'Server=;'
+                             'Database=;'
+                             'Trusted_Connection=;')
 
         cursor = cnx.cursor()
         sd = ""
