@@ -1958,7 +1958,7 @@ class initUi(QWidget): #setting up UI elements#
                                 # 'Database=;'
                                 'uid=;'
                                 'pwd=;')
-        # 'pwd=KBMA4Prod;')
+        # 'pwd=;')
         os.chmod(log, S_IWUSR | S_IREAD)
         logw = open(log, "a+")
         if len(self.rejResult.text()) == 0:
@@ -2093,7 +2093,7 @@ class initUi(QWidget): #setting up UI elements#
                                 # 'uid=;'
                                 # 'pwd=;')
                                 'Trusted_Connection=;')
-        # 'pwd=KBMA4Prod;')
+        # 'pwd=;')
         rq = "Insert into RejectionReport VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         rcomm = self.rejComField.toPlainText()
 
