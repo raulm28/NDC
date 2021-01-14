@@ -104,7 +104,7 @@ class loginWindow(QDialog):
             else:
                 self.accept()
                 val = True
-                Base = 'dc=mskcc,dc=root,dc=mskcc,dc=org'
+                Base = ''
                 conn.search(search_base=Base, search_filter='(cn=' + u + ')', attributes=[ALL_ATTRIBUTES])
                 cd = json.loads(conn.response_to_json())
                 user = cd['entries'][0]['attributes']['extensionAttribute15']
