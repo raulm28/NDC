@@ -77,10 +77,10 @@ class loginWindow(QDialog):
                                 QMessageBox.Ok, QMessageBox.Ok)
             loc = 'Unassigned WS'
             num = '999-999-9999'
-            email = 'zzPDL_PHA_Informatics@mskcc.org'
+            email = '@mskcc.org'
         else:
             if locnum.loc[locnum['WSID'] == ws, 'email'].empty:
-                email = 'zzPDL_PHA_Informatics@mskcc.org'
+                email = '@mskcc.org'
             else:
                 email = locnum.loc[locnum['WSID'] == ws, 'email'].iloc[0]
             if locnum.loc[locnum['WSID'] == ws, 'Contact#'].empty:
@@ -93,7 +93,7 @@ class loginWindow(QDialog):
                 loc = locnum.loc[locnum['WSID'] == ws, 'Area'].iloc[0]
 
         if p != '':
-            server = Server(host='MSKCC.ROOT.MSKCC.ORG', use_ssl=True, get_info=ALL)
+            server = Server(host='MSKCC.ORG', use_ssl=True, get_info=ALL)
             conn = Connection(server, user='MSKCC\\' + u, password=p)
             p = ''
             if not conn.bind():
@@ -110,7 +110,7 @@ class loginWindow(QDialog):
                 user = cd['entries'][0]['attributes']['extensionAttribute15']
                 try:
                     d = cd['entries'][0]['attributes']['memberOf']
-                    if 'CN=GRP_PHA_Informatics,OU=ezGroups,OU=Resources,DC=MSKCC,DC=ROOT,DC=MSKCC,DC=ORG' in d:
+                    if 'CN=GRP_PHA_Informatics' in d:
                         admin = 'Y'
                     else:
                         admin = 'N'
