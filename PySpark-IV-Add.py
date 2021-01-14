@@ -19,7 +19,7 @@ pd.set_option('display.width', 100000)
 os.environ['HADOOP_HOME'] = 'C:\Hadoop'
 sys.path.append("C:\Hadoop\\bin")
 #writer = ExcelWriter()
-cnx = pymssql.connect(server='SCISPSQLRDS',user='MSKCC\molinar1',password='nirvana20',database='PROD')
+cnx = pymssql.connect(server='',user='',password='',database='')
 
 cursor = cnx.cursor()
 #f1 = open('G:\My Documents\SQL Server Management Studio\VerificationHeatMapping.sql','r')  
